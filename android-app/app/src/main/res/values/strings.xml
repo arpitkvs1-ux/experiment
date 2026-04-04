@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">KV Student Dashboard</string>
-    <string name="saved_file">Saved %1$s (app storage → Android/data/…/files/Download)</string>
+    <string name="saved_file_downloads">Saved %1$s to Downloads → KV Student Dashboard</string>
+    <string name="saved_file_app_storage_hint">Android/data/…/files/Download</string>
+    <string name="saved_file_fallback">Saved %1$s (%2$s)</string>
     <string name="save_failed">Save failed: %1$s</string>
+    <string name="storage_permission_denied">Storage permission denied — saved to app folder instead</string>
 </resources>

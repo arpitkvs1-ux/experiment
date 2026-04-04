@@ -6,12 +6,15 @@ import android.os.Looper
 import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.widget.Toast
-import java.io.File
 
 /**
  * Lets the embedded WebView save Excel/PDF (blob downloads do not work in WebView).
+ * Files go to public Downloads (KV Student Dashboard) when the OS allows it.
  */
-class ExportBridge(private val activity: Activity) {
+class ExportBridge(
+    private val activity: Activity,
+    private val onSave: (mimeType: String, fileName: String, bytes: ByteArray) -> Unit
+) {
 
     @JavascriptInterface
     fun saveFile(mimeType: String, fileName: String, base64Data: String) {
@@ -19,16 +22,8 @@ class ExportBridge(private val activity: Activity) {
             try {
                 val bytes = Base64.decode(base64Data, Base64.DEFAULT)
                 val safe = fileName.replace(Regex("""[\\/:*?"<>|]+"""), "_").take(180)
-                val dir = activity.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
-                    ?: activity.filesDir
-                if (!dir.exists()) dir.mkdirs()
-                val out = File(dir, safe.ifEmpty { "KV_Report.bin" })
-                out.writeBytes(bytes)
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.saved_file, out.name),
-                    Toast.LENGTH_LONG
-                ).show()
+                val name = safe.ifEmpty { "KV_Report.bin" }
+                onSave(mimeType, name, bytes)
             } catch (e: Exception) {
                 Toast.makeText(
                     activity,
