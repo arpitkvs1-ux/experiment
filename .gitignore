@@ -1,0 +1,11 @@
+node_modules/
+data/students.sqlite
+web/dist/
+.DS_Store
+.env
+*.log
+android-app/build/
+android-app/.gradle/
+android-app/local.properties
+android-app/.idea/
+android-app/*.iml

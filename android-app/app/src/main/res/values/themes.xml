@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KVStudentDashboard" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/kv_maroon</item>
+        <item name="colorPrimaryDark">@color/kv_maroon_dark</item>
+        <item name="android:statusBarColor">@color/kv_maroon_dark</item>
+        <item name="android:navigationBarColor">@color/kv_maroon_dark</item>
+        <item name="android:windowBackground">@color/kv_cream</item>
+    </style>
+</resources>

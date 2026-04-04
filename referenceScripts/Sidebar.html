@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333; background-color: #f0f2f5; margin: 0; }
+      
+      /* Dashboard Container */
+      .dashboard-container { 
+        display: flex; 
+        flex-wrap: wrap; 
+        gap: 20px; 
+        justify-content: center;
+        max-width: 1800px; /* Increased to accommodate 4 columns */
+        margin: 0 auto;
+      }
+
+      .card { 
+        background: white; 
+        padding: 20px; 
+        border-radius: 8px; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        min-height: 280px; 
+        display: flex; 
+        flex-direction: column; 
+      }
+
+      .section-small { flex: 1; min-width: 300px; }
+      .section-large { flex: 4; min-width: 1000px; } /* Wider to support 4-column grid */
+
+      h3 { border-bottom: 2px solid #1a73e8; padding-bottom: 8px; color: #1a73e8; margin-top: 0; font-size: 16px; }
+
+      /* Section 5: FOUR-COLUMN Grid Layout */
+      .scroll-area { 
+        flex-grow: 1; 
+        margin-bottom: 15px; 
+        border: 1px solid #eee; 
+        padding: 15px; 
+        background: #fafafa;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr); /* FOUR COLUMNS */
+        gap: 8px;
+      }
+
+      .header-item { 
+        font-size: 11px; /* Slightly smaller font to fit 4 columns better */
+        display: flex; 
+        align-items: center; 
+        background: white; 
+        padding: 6px; 
+        border-radius: 4px; 
+        border: 1px solid #f0f0f0; 
+      }
+
+      input[type="checkbox"] { margin-right: 8px; cursor: pointer; }
+      select { width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; }
+      
+      button { width: 100%; padding: 10px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; margin-bottom: 8px; font-size: 13px; transition: opacity 0.2s; }
+      button:hover { opacity: 0.9; }
+      
+      .btn-blue { background-color: #1a73e8; color: white; }
+      .btn-green { background-color: #34a853; color: white; }
+      .btn-purple { background-color: #673ab7; color: white; }
+      .btn-orange { background-color: #e67c73; color: white; }
+      .btn-outline { background: none; border: 1px solid #1a73e8; color: #1a73e8; margin-bottom: 10px;}
+      .btn-profile { background-color: #4285f4; color: white; margin-top: auto; }
+      
+      #detailDisplay { margin-top: 10px; padding: 12px; border-radius: 4px; background: #e8f0fe; text-align: center; border: 1px solid #1a73e8; min-height: 45px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    </style>
+  </head>
+  <body>
+
+    <div class="dashboard-container">
+      
+      <div class="card section-small">
+        <h3>Student Detail</h3>
+        <label style="font-size: 11px; font-weight: bold;">Select Student:</label>
+        <select id="sec1Student" onchange="fetchDetailValue()">
+          <option value="">-- Choose Name --</option>
+          <? for (var i = 0; i < studentList.length; i++) { ?>
+            <option value="<?= studentList[i] ?>"><?= studentList[i] ?></option>
+          <? } ?>
+        </select>
+        <label style="font-size: 11px; font-weight: bold;">Select Header:</label>
+        <select id="sec1Header" onchange="fetchDetailValue()">
+          <option value="">-- Choose Column --</option>
+          <? for (var i = 0; i < headers.length; i++) { ?>
+            <option value="<?= i ?>"><?= headers[i] ?></option>
+          <? } ?>
+        </select>
+        <div id="detailDisplay"><span style="color: #666; font-size: 11px;">Result will appear here</span></div>
+      </div>
+
+      <div class="card section-small">
+        <h3>List Generator</h3>
+        <label style="font-size: 11px; font-weight: bold;">Select Category (Header):</label>
+        <select id="sec2Header" onchange="updateSubDropdown()">
+          <option value="">-- Choose Column --</option>
+          <? for (var i = 0; i < headers.length; i++) { ?>
+            <option value="<?= i ?>"><?= headers[i] ?></option>
+          <? } ?>
+        </select>
+        <label style="font-size: 11px; font-weight: bold;">Select Sub-Value:</label>
+        <select id="sec2SubValue">
+          <option value="">-- Select Header First --</option>
+        </select>
+        <button class="btn-blue" onclick="generateFilteredList()" style="margin-top: auto;">Generate List</button>
+      </div>
+
+      <div class="card section-small">
+        <h3>Student Profile</h3>
+        <label style="font-size: 11px; font-weight: bold;">Select Student:</label>
+        <select id="studentDropdown">
+          <option value="">-- Choose Name --</option>
+          <? for (var i = 0; i < studentList.length; i++) { ?>
+            <option value="<?= studentList[i] ?>"><?= studentList[i] ?></option>
+          <? } ?>
+        </select>
+        <button class="btn-profile" onclick="generateProfile()">Show Profile</button>
+      </div>
+
+      <div class="card section-small">
+        <h3>Summary Generator</h3>
+        <button class="btn-purple" onclick="google.script.run.showEnrollmentTable()">Category Summary</button>
+        <button class="btn-orange" onclick="google.script.run.showAdmissionCategoryTable()">Admission Cat. Summary</button>
+        <button style="background-color: #ccc; color: #666;" disabled>Future Summary 3</button>
+        <button style="background-color: #ccc; color: #666;" disabled>Future Summary 4</button>
+      </div>
+
+      <div class="card section-large">
+        <h3>Custom Report Generator</h3>
+        <button class="btn-outline" onclick="toggleAll(this)">Select All</button>
+        <form id="columnForm">
+          <div class="scroll-area">
+            <? for (var i = 0; i < headers.length; i++) { ?>
+              <div class="header-item">
+                <input type="checkbox" name="col" value="<?= i ?>" id="col<?= i ?>">
+                <label for="col<?= i ?>"><?= headers[i] ?></label>
+              </div>
+            <? } ?>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn-blue" onclick="runReport()">Show Selected Report</button>
+            <button type="button" class="btn-green" onclick="runSave()">Save Selected to Drive</button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <script>
+      function fetchDetailValue() {
+        var studentName = document.getElementById("sec1Student").value;
+        var colIndex = document.getElementById("sec1Header").value;
+        var display = document.getElementById("detailDisplay");
+        if (studentName && colIndex !== "") {
+          display.innerHTML = "Loading...";
+          google.script.run.withSuccessHandler(function(v) {
+            display.innerHTML = "<strong>Value:</strong><span style='font-size: 15px; color: #1a73e8; margin-top:5px;'>" + (v || "-") + "</span>";
+          }).getSingleValue(studentName, colIndex);
+        }
+      }
+
+      function updateSubDropdown() {
+        var colIndex = document.getElementById("sec2Header").value;
+        var subDropdown = document.getElementById("sec2SubValue");
+        if (!colIndex) return;
+        subDropdown.innerHTML = "<option>Loading...</option>";
+        google.script.run.withSuccessHandler(function(values) {
+          subDropdown.innerHTML = "";
+          values.forEach(function(v) {
+            var opt = document.createElement("option");
+            opt.value = v; opt.text = v;
+            subDropdown.add(opt);
+          });
+        }).getUniqueValuesForHeader(colIndex);
+      }
+
+      function generateFilteredList() {
+        var colIndex = document.getElementById("sec2Header").value;
+        var subValue = document.getElementById("sec2SubValue").value;
+        var headerName = document.getElementById("sec2Header").options[document.getElementById("sec2Header").selectedIndex].text;
+        if (!colIndex || !subValue) { alert("Please select both header and value."); return; }
+        google.script.run.showFilteredList(colIndex, subValue, headerName);
+      }
+
+      function generateProfile() {
+        var name = document.getElementById("studentDropdown").value;
+        if (!name) { alert("Please select a student."); return; }
+        google.script.run.showStudentProfile(name);
+      }
+
+      function toggleAll(source) {
+        var checkboxes = document.getElementsByName('col');
+        var isChecked = source.innerText === "Select All";
+        for (var i = 0; i < checkboxes.length; i++) { checkboxes[i].checked = isChecked; }
+        source.innerText = isChecked ? "Deselect All" : "Select All";
+      }
+
+      function getSelectedIndices() {
+        var checkboxes = document.getElementsByName('col');
+        var selected = [];
+        for (var i = 0; i < checkboxes.length; i++) { if (checkboxes[i].checked) selected.push(parseInt(checkboxes[i].value)); }
+        return selected;
+      }
+
+      function runReport() {
+        var s = getSelectedIndices();
+        if (s.length === 0) { alert('Select at least one column.'); return; }
+        google.script.run.showReport(s);
+      }
+
+      function runSave() {
+        var s = getSelectedIndices();
+        if (s.length === 0) { alert('Select columns.'); return; }
+        google.script.run.withSuccessHandler(function(u) { if (u) window.open(u, '_blank'); }).processSidebarSave(s);
+      }
+    </script>
+  </body>
+</html>

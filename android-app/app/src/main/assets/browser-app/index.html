@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KV NIT Agartala — Student Dashboard (offline)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-bar">
+        <div>
+          <h1 class="brand">KV NIT Agartala</h1>
+          <p class="tagline">Runs entirely in your browser · Data saved in localStorage · No Node.js</p>
+        </div>
+        <div class="top-actions">
+          <label class="btn outline" style="display: inline-block; margin: 0">
+            <input type="file" id="fileImport" accept=".csv,text/csv" style="display: none" />
+            Import CSV
+          </label>
+          <button type="button" class="btn outline" id="btnExportFull">Export all (Excel)</button>
+          <button type="button" class="btn outline" id="btnClearData">Clear data</button>
+        </div>
+      </header>
+
+      <p class="card-desc" style="margin: -12px 0 20px">
+        Tip: export your <strong>AllStudentDetails</strong> sheet as CSV from Google Sheets, then use <strong>Import CSV</strong>.
+        First column names must match the sheet (e.g. <code>Student Name</code>, <code>house</code>).
+      </p>
+
+      <section class="card">
+        <h2 class="card-title">Dashboard filter</h2>
+        <p class="card-desc">Same rules as the sheet dashboard (QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY).</p>
+        <div class="row">
+          <label class="field">
+            <span>Category</span>
+            <select id="dashCat">
+              <option>QUOTA</option>
+              <option>SOCIAL CAT</option>
+              <option selected>HOUSE</option>
+              <option>KV CAT</option>
+              <option>GENDER</option>
+              <option>MINORITY</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Sub category</span>
+            <select id="dashSub"></select>
+          </label>
+          <button type="button" class="btn primary" id="btnDashFilter">Show list</button>
+        </div>
+      </section>
+
+      <div class="dashboard-grid">
+        <section class="card">
+          <h2 class="card-title">Student detail</h2>
+          <label class="field">
+            <span>Student</span>
+            <select id="sec1Student"><option value="">— Choose name —</option></select>
+          </label>
+          <label class="field">
+            <span>Column</span>
+            <select id="sec1Header"><option value="">— Choose column —</option></select>
+          </label>
+          <div class="detail-box" id="detailDisplay"><span class="muted">Pick student and column</span></div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">List generator</h2>
+          <label class="field">
+            <span>Header</span>
+            <select id="sec2Header"><option value="">— Choose column —</option></select>
+          </label>
+          <label class="field">
+            <span>Value</span>
+            <select id="sec2SubValue"><option value="">— Select header first —</option></select>
+          </label>
+          <button type="button" class="btn primary" id="btnListGen">Generate list</button>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Student profile</h2>
+          <label class="field">
+            <span>Student</span>
+            <select id="profileStudent"><option value="">— Choose name —</option></select>
+          </label>
+          <button type="button" class="btn accent" id="btnProfile">Show profile</button>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Summaries</h2>
+          <p class="card-desc small">Counts from your current data.</p>
+          <button type="button" class="btn purple" id="btnSumCat">Category summary</button>
+          <button type="button" class="btn orange" id="btnSumAdm">Admission category summary</button>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2 class="card-title">Custom report</h2>
+        <div class="toolbar">
+          <button type="button" class="btn outline sm" id="btnToggleCols">Select all</button>
+        </div>
+        <div class="checkbox-grid" id="checkboxGrid"></div>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="btnShowReport">Show report</button>
+          <button type="button" class="btn success" id="btnExportExcel">Download Excel (selected)</button>
+          <button type="button" class="btn pdf" id="btnExportPdf">Download PDF (selected)</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Master database</h2>
+        <div class="tabs">
+          <button type="button" class="tab active" data-tab="list">Records (<span id="recordCount">0</span>)</button>
+          <button type="button" class="tab" data-tab="add">Add student</button>
+        </div>
+        <div id="panelList">
+          <div class="table-scroll">
+            <table class="data-table compact" id="manageTable">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Admn No</th>
+                  <th>House</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="panelAdd" hidden>
+          <form id="formAdd" class="add-form">
+            <p class="card-desc small">Required: <strong>Student Name</strong>. Other fields optional.</p>
+            <div class="form-grid" id="addFormGrid"></div>
+            <button type="submit" class="btn success">Add to database</button>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <div class="report-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <header class="report-header">
+          <div>
+            <div class="school-name">Kendriya Vidyalaya NIT Agartala</div>
+            <h2 class="report-title" id="modalTitle"></h2>
+          </div>
+          <button type="button" class="btn ghost" id="modalClose" aria-label="Close">×</button>
+        </header>
+        <div class="table-wrap">
+          <table class="data-table" id="modalTable">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <footer class="report-footer">
+          <button type="button" class="btn success" id="modalExcel">Download Excel</button>
+          <button type="button" class="btn pdf" id="modalPdf">Download PDF</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Bundled locally so PDF/Excel work offline and when CDNs are blocked -->
+    <script src="vendor/jspdf.umd.min.js"></script>
+    <script src="vendor/jspdf.plugin.autotable.min.js"></script>
+    <script src="vendor/xlsx.full.min.js"></script>
+    <script src="export-reports.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

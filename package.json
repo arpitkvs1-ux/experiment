@@ -1,0 +1,17 @@
+{
+  "name": "studentapp",
+  "private": true,
+  "version": "1.0.0",
+  "description": "KV NIT Agartala student dashboard — web API + UI",
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../web && npm install",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "build": "cd web && npm run build",
+    "start": "cd server && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
