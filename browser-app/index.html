@@ -3,148 +3,352 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KV NIT Agartala — Student Dashboard (offline)</title>
+    <title>Student dashboard</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="top-bar">
-        <div>
-          <h1 class="brand">KV NIT Agartala</h1>
-          <p class="tagline">Runs entirely in your browser · Data saved in localStorage · No Node.js</p>
-        </div>
-        <div class="top-actions">
-          <label class="btn outline" style="display: inline-block; margin: 0">
-            <input type="file" id="fileImport" accept=".csv,text/csv" style="display: none" />
-            Import CSV
-          </label>
-          <button type="button" class="btn outline" id="btnExportFull">Export all (Excel)</button>
-          <button type="button" class="btn outline" id="btnClearData">Clear data</button>
-        </div>
-      </header>
+    <div class="app-frame">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="sidebar-brand" id="appBrandSchool">School name</div>
+        <p class="sidebar-class-line" id="appBrandClass" hidden></p>
+        <p class="sidebar-tagline">Offline dashboard</p>
+        <nav class="sidebar-nav" role="navigation">
+          <button type="button" class="nav-item active" data-nav="home">Home</button>
+          <button type="button" class="nav-item" data-nav="queries">Queries</button>
+          <button type="button" class="nav-item" data-nav="reports">Reports</button>
+          <button type="button" class="nav-item" data-nav="marks">Marks</button>
+          <button type="button" class="nav-item" data-nav="students">Students</button>
+          <button type="button" class="nav-item" data-nav="settings">Settings</button>
+          <button type="button" class="nav-item" data-nav="setup">Setup guide</button>
+        </nav>
+      </aside>
 
-      <p class="card-desc" style="margin: -12px 0 20px">
-        Tip: export your <strong>AllStudentDetails</strong> sheet as CSV from Google Sheets, then use <strong>Import CSV</strong>.
-        First column names must match the sheet (e.g. <code>Student Name</code>, <code>house</code>).
-      </p>
-
-      <section class="card">
-        <h2 class="card-title">Dashboard filter</h2>
-        <p class="card-desc">Same rules as the sheet dashboard (QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY).</p>
-        <div class="row">
-          <label class="field">
-            <span>Category</span>
-            <select id="dashCat">
-              <option>QUOTA</option>
-              <option>SOCIAL CAT</option>
-              <option selected>HOUSE</option>
-              <option>KV CAT</option>
-              <option>GENDER</option>
-              <option>MINORITY</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Sub category</span>
-            <select id="dashSub"></select>
-          </label>
-          <button type="button" class="btn primary" id="btnDashFilter">Show list</button>
-        </div>
-      </section>
-
-      <div class="dashboard-grid">
-        <section class="card">
-          <h2 class="card-title">Student detail</h2>
-          <label class="field">
-            <span>Student</span>
-            <select id="sec1Student"><option value="">— Choose name —</option></select>
-          </label>
-          <label class="field">
-            <span>Column</span>
-            <select id="sec1Header"><option value="">— Choose column —</option></select>
-          </label>
-          <div class="detail-box" id="detailDisplay"><span class="muted">Pick student and column</span></div>
-        </section>
-
-        <section class="card">
-          <h2 class="card-title">List generator</h2>
-          <label class="field">
-            <span>Header</span>
-            <select id="sec2Header"><option value="">— Choose column —</option></select>
-          </label>
-          <label class="field">
-            <span>Value</span>
-            <select id="sec2SubValue"><option value="">— Select header first —</option></select>
-          </label>
-          <button type="button" class="btn primary" id="btnListGen">Generate list</button>
-        </section>
-
-        <section class="card">
-          <h2 class="card-title">Student profile</h2>
-          <label class="field">
-            <span>Student</span>
-            <select id="profileStudent"><option value="">— Choose name —</option></select>
-          </label>
-          <button type="button" class="btn accent" id="btnProfile">Show profile</button>
-        </section>
-
-        <section class="card">
-          <h2 class="card-title">Summaries</h2>
-          <p class="card-desc small">Counts from your current data.</p>
-          <button type="button" class="btn purple" id="btnSumCat">Category summary</button>
-          <button type="button" class="btn orange" id="btnSumAdm">Admission category summary</button>
-        </section>
-      </div>
-
-      <section class="card">
-        <h2 class="card-title">Custom report</h2>
-        <div class="toolbar">
-          <button type="button" class="btn outline sm" id="btnToggleCols">Select all</button>
-        </div>
-        <div class="checkbox-grid" id="checkboxGrid"></div>
-        <div class="btn-row">
-          <button type="button" class="btn primary" id="btnShowReport">Show report</button>
-          <button type="button" class="btn success" id="btnExportExcel">Download Excel (selected)</button>
-          <button type="button" class="btn pdf" id="btnExportPdf">Download PDF (selected)</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2 class="card-title">Master database</h2>
-        <div class="tabs">
-          <button type="button" class="tab active" data-tab="list">Records (<span id="recordCount">0</span>)</button>
-          <button type="button" class="tab" data-tab="add">Add student</button>
-        </div>
-        <div id="panelList">
-          <div class="table-scroll">
-            <table class="data-table compact" id="manageTable">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Admn No</th>
-                  <th>House</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+      <div class="main-column">
+        <header class="top-bar top-bar--compact">
+          <div>
+            <p class="top-bar-school-line" id="appTopBarSchool"></p>
+            <h1 class="brand">Student dashboard</h1>
+            <p class="tagline">Runs in your browser · Data saved in localStorage · No Node.js</p>
           </div>
-        </div>
-        <div id="panelAdd" hidden>
-          <form id="formAdd" class="add-form">
-            <p class="card-desc small">Required: <strong>Student Name</strong>. Other fields optional.</p>
-            <div class="form-grid" id="addFormGrid"></div>
-            <button type="submit" class="btn success">Add to database</button>
-          </form>
-        </div>
-      </section>
+        </header>
+
+        <main class="main-area">
+          <section id="view-home" class="app-view" data-view="home">
+            <div class="card">
+              <h2 class="card-title">Welcome</h2>
+              <p class="card-desc">
+                Use the menu to run queries, build reports, enter marks, or manage student records. Outputs (Excel / PDF) are unchanged.
+              </p>
+              <p class="home-stat">
+                <span id="homeRecordCount">0</span> <span class="home-stat-label">students in your local database</span>
+              </p>
+              <p class="card-desc small">
+                Your class list syncs from the Google Sheet <strong>Master</strong> tab while the app is open (and when you come back to it). Column names should match that sheet (e.g. <code>Student Name</code>, <code>house</code>).
+              </p>
+            </div>
+          </section>
+
+          <section id="view-queries" class="app-view" data-view="queries" hidden>
+            <div class="card">
+              <h2 class="card-title">Queries</h2>
+              <p class="card-desc small">Same rules as the sheet dashboard for filters; lookups and lists use your current local data.</p>
+              <div class="subtabs query-subtabs" role="tablist" aria-label="Query type">
+                <button type="button" class="query-tab active" data-query-tab="dash" role="tab" aria-selected="true">Dashboard filter</button>
+                <button type="button" class="query-tab" data-query-tab="lookup" role="tab" aria-selected="false">Student &amp; column</button>
+                <button type="button" class="query-tab" data-query-tab="list" role="tab" aria-selected="false">List by field</button>
+                <button type="button" class="query-tab" data-query-tab="profile" role="tab" aria-selected="false">Profile</button>
+              </div>
+
+              <div id="query-panel-dash" class="query-panel" role="tabpanel">
+                <h3 class="query-panel-title">Dashboard filter</h3>
+                <p class="card-desc small">QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY.</p>
+                <div class="row">
+                  <label class="field">
+                    <span>Category</span>
+                    <select id="dashCat">
+                      <option>QUOTA</option>
+                      <option>SOCIAL CAT</option>
+                      <option selected>HOUSE</option>
+                      <option>KV CAT</option>
+                      <option>GENDER</option>
+                      <option>MINORITY</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Sub category</span>
+                    <select id="dashSub"></select>
+                  </label>
+                  <button type="button" class="btn primary" id="btnDashFilter">Show list</button>
+                </div>
+              </div>
+
+              <div id="query-panel-lookup" class="query-panel" role="tabpanel" hidden>
+                <h3 class="query-panel-title">Student detail</h3>
+                <label class="field">
+                  <span>Student</span>
+                  <select id="sec1Student"><option value="">— Choose name —</option></select>
+                </label>
+                <label class="field">
+                  <span>Column</span>
+                  <select id="sec1Header"><option value="">— Choose column —</option></select>
+                </label>
+                <div class="detail-box" id="detailDisplay"><span class="muted">Pick student and column</span></div>
+              </div>
+
+              <div id="query-panel-list" class="query-panel" role="tabpanel" hidden>
+                <h3 class="query-panel-title">List generator</h3>
+                <label class="field">
+                  <span>Header</span>
+                  <select id="sec2Header"><option value="">— Choose column —</option></select>
+                </label>
+                <label class="field">
+                  <span>Value</span>
+                  <select id="sec2SubValue"><option value="">— Select header first —</option></select>
+                </label>
+                <button type="button" class="btn primary" id="btnListGen">Generate list</button>
+              </div>
+
+              <div id="query-panel-profile" class="query-panel" role="tabpanel" hidden>
+                <h3 class="query-panel-title">Student profile</h3>
+                <label class="field">
+                  <span>Student</span>
+                  <select id="profileStudent"><option value="">— Choose name —</option></select>
+                </label>
+                <button type="button" class="btn accent" id="btnProfile">Show profile</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-reports" class="app-view" data-view="reports" hidden>
+            <div class="card">
+              <h2 class="card-title">Summaries</h2>
+              <p class="card-desc small">Counts from your current data.</p>
+              <div class="btn-row">
+                <button type="button" class="btn purple" id="btnSumCat">Category summary</button>
+                <button type="button" class="btn orange" id="btnSumAdm">Admission category summary</button>
+              </div>
+            </div>
+            <div class="card">
+              <h2 class="card-title">Custom report</h2>
+              <div class="toolbar">
+                <button type="button" class="btn outline sm" id="btnToggleCols">Select all</button>
+              </div>
+              <div class="checkbox-grid" id="checkboxGrid"></div>
+              <div class="btn-row">
+                <button type="button" class="btn primary" id="btnShowReport">Show report</button>
+                <button type="button" class="btn success" id="btnExportExcel">Download Excel (selected)</button>
+                <button type="button" class="btn pdf" id="btnExportPdf">Download PDF (selected)</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-marks" class="app-view" data-view="marks" hidden>
+            <div id="marksEntryPanel" class="marks-entry-panel">
+              <section class="card" id="marksEntrySection">
+                <div class="marks-card-head">
+                  <h2 class="card-title">Examination marks</h2>
+                  <button type="button" class="btn outline sm marks-share-top-btn" id="btnMarksCopyTeacherLink" title="Share with teachers">
+                    Copy teacher marks link
+                  </button>
+                </div>
+                <p class="card-desc small">
+                  Choose <strong>examination</strong> and <strong>subject</strong> first. If no slip exists yet, the entry form appears below; if marks are already on file, use <strong>Edit marks</strong> to open the form.
+                  Use <strong>Enter</strong> / <strong>↓</strong> / <strong>↑</strong> between marks cells. <strong>a</strong> / <strong>ab</strong> / <strong>AB</strong> count as absent.
+                  <strong>Submit</strong> saves and syncs to Sheets; <strong>Download mark slip</strong> uses the same layout as before.
+                </p>
+                <p class="card-desc small">
+                  Marks sync from Sheets when you open this page or after each Submit. <strong>Copy teacher marks link</strong> copies only the teacher page URL to the clipboard (teachers open it and pick examination and subject).
+                </p>
+
+                <div class="marks-picker-grid">
+                  <label class="field">
+                    <span>Examination</span>
+                    <select id="marksExam" aria-label="Examination">
+                      <option value="">— Select —</option>
+                      <option>PT1</option>
+                      <option>PT2</option>
+                      <option>Half Yearly</option>
+                      <option>SEE</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Subject</span>
+                    <select id="marksSubject" aria-label="Subject">
+                      <option value="">— Select examination first —</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div id="marksQuickActions" class="marks-quick-actions" hidden>
+                  <p class="card-desc small" id="marksExistingSummary"></p>
+                  <div class="btn-row">
+                    <button type="button" class="btn primary" id="btnMarksEditSelected">Edit marks</button>
+                    <button type="button" class="btn pdf" id="btnMarksDownloadSelected">Download mark slip</button>
+                  </div>
+                </div>
+
+                <div id="marksDynamicArea" class="marks-dynamic-area" hidden>
+                  <p class="marks-picker-status" id="marksPickerStatus"></p>
+                  <div id="marksNewEntrySection" class="marks-new-entry-section" hidden>
+                  <button type="button" class="btn outline sm" id="btnMarksCancelEdit" hidden>Cancel edit</button>
+                  <div class="marks-meta-grid marks-meta-grid--compact">
+                    <label class="field">
+                      <span>Maximum marks</span>
+                      <input type="text" id="marksMax" inputmode="decimal" placeholder="e.g. 50" autocomplete="off" />
+                    </label>
+                    <label class="field">
+                      <span>Name of subject teacher</span>
+                      <input type="text" id="marksTeacher" placeholder="Teacher name" autocomplete="name" />
+                    </label>
+                    <label class="field">
+                      <span>Date of examination</span>
+                      <input type="date" id="marksExamDate" />
+                    </label>
+                  </div>
+                  <p class="card-desc small" id="marksTableHint"></p>
+                  <div class="table-scroll marks-table-wrap">
+                    <table class="data-table compact marks-roll-table" id="marksStudentTable" hidden>
+                      <thead>
+                        <tr>
+                          <th>Roll No.</th>
+                          <th>Student name</th>
+                          <th>Marks obtained</th>
+                        </tr>
+                      </thead>
+                      <tbody id="marksStudentTbody"></tbody>
+                    </table>
+                  </div>
+                  <div class="marks-actions btn-row">
+                    <button type="button" class="btn success" id="btnMarksSubmit">Submit</button>
+                  </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="view-students" class="app-view" data-view="students" hidden>
+            <section class="card">
+              <h2 class="card-title">Master database</h2>
+              <div class="tabs">
+                <button type="button" class="tab active" data-tab="list">Records (<span id="recordCount">0</span>)</button>
+                <button type="button" class="tab" data-tab="add">Add student</button>
+              </div>
+              <div id="panelList">
+                <div class="table-scroll">
+                  <table class="data-table compact" id="manageTable">
+                    <thead>
+                      <tr>
+                        <th>R.NO.</th>
+                        <th>Name</th>
+                        <th>Admn No</th>
+                        <th>House</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+              <div id="panelAdd" hidden>
+                <form id="formAdd" class="add-form">
+                  <p class="card-desc small">Required: <strong>Student Name</strong>. Other fields optional.</p>
+                  <div class="form-grid" id="addFormGrid"></div>
+                  <button type="submit" class="btn success">Add to database</button>
+                </form>
+              </div>
+            </section>
+          </section>
+
+          <section id="view-setup" class="app-view" data-view="setup" hidden>
+            <div class="card setup-guide-card">
+              <h2 class="card-title">Setup guide</h2>
+              <p class="card-desc small">
+                First-time setup for this project: Google Sheet, Apps Script, web app URL, and branding. Keep this page in sync when the process changes (edit
+                <code>index.html</code> in the <code>browser-app</code> folder, section <code>view-setup</code>).
+              </p>
+              <ol class="setup-steps">
+                <li>
+                  <h3 class="setup-step-title">Create the Google Sheet</h3>
+                  <p>Create a new Google Spreadsheet. Add two tabs named exactly <strong>Master</strong> and <strong>Marks</strong> (capital M).</p>
+                  <p>
+                    On <strong>Master</strong>, row 1 must be your student column headers — same names you use in CSV / this app (e.g.
+                    <code>R.NO.</code>, <code>Student Name</code>, <code>house</code>, …). Data starts row 2. The app syncs this tab into local storage.
+                  </p>
+                  <p>
+                    The <strong>Marks</strong> tab is filled by the Apps Script backend (slip rows). You do not need to create headers by hand; the script can
+                    create them on first save. Optional: leave the tab empty until you deploy.
+                  </p>
+                </li>
+                <li>
+                  <h3 class="setup-step-title">Apps Script project</h3>
+                  <p>In the spreadsheet: <strong>Extensions → Apps Script</strong>. Add these files from the repo folder <code>google-apps-script/</code>:</p>
+                  <ul>
+                    <li><code>Code.gs</code> — main API (<code>doPost</code>, <code>doGet</code>, marks CRUD, students read).</li>
+                    <li><code>TeacherMarks.html</code> — teacher marks UI (<code>?teacher=1</code>).</li>
+                    <li><code>TeacherMarksPdfInclude.html</code> — PDF helper included from the teacher page.</li>
+                  </ul>
+                  <p>
+                    In <code>Code.gs</code>, set <code>CONFIG.SPREADSHEET_ID</code> to your workbook ID (from the Sheet URL). Set
+                    <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> to match the dashboard (see step 5).
+                  </p>
+                </li>
+                <li>
+                  <h3 class="setup-step-title">Deploy the web app</h3>
+                  <p><strong>Deploy → New deployment</strong> → type <strong>Web app</strong>. Execute as: <strong>Me</strong>. Who has access: <strong>Anyone</strong> (or your org policy).</p>
+                  <p>Copy the deployment URL — it must end with <code>/exec</code>.</p>
+                  <p>Teachers open the same URL with <code>?teacher=1</code> (the teacher page lets them pick exam and subject).</p>
+                </li>
+                <li>
+                  <h3 class="setup-step-title">Point the dashboard at the web app</h3>
+                  <p>
+                    In <code>browser-app/sheets-webapp-config.js</code>, set <code>window.KV_SHEETS_WEB_APP_URL</code> to that <code>/exec</code> URL (no extra
+                    query string). This file is the single source for the browser app; the Android build copies <code>browser-app</code> via Gradle — do not maintain a second copy by hand.
+                  </p>
+                  <p>Reload the dashboard. Open <strong>Marks</strong> — slips should list from Sheets after sync.</p>
+                </li>
+                <li>
+                  <h3 class="setup-step-title">School name and class (branding)</h3>
+                  <p>
+                    In <code>sheets-webapp-config.js</code>, set <code>KV_SCHOOL_NAME</code> and <code>KV_SCHOOL_CLASS</code>. Use <code>"—"</code> or
+                    <code>""</code> for class to hide the class line where supported.
+                  </p>
+                  <p>Set the same values in Apps Script <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> so the teacher page and PDF slips match.</p>
+                </li>
+                <li>
+                  <h3 class="setup-step-title">After code changes</h3>
+                  <p><strong>Apps Script:</strong> Save, then <strong>Deploy → Manage deployments</strong> → edit → <strong>New version</strong> → Deploy.</p>
+                  <p><strong>Dashboard:</strong> Refresh the browser (hard refresh if cached). <strong>Android:</strong> Run Gradle <code>copyBrowserApp</code> / rebuild if you changed <code>browser-app</code>.</p>
+                </li>
+              </ol>
+            </div>
+          </section>
+
+          <section id="view-settings" class="app-view" data-view="settings" hidden>
+            <div class="card">
+              <h2 class="card-title">Data &amp; import / export</h2>
+              <p class="card-desc small">
+                Students load from the <strong>Master</strong> tab automatically. Use <strong>Import CSV</strong> only if you need a one-off backup or offline copy.
+              </p>
+              <div class="settings-actions btn-row">
+                <label class="btn outline" style="display: inline-block; margin: 0">
+                  <input type="file" id="fileImport" accept=".csv,text/csv" style="display: none" />
+                  Import CSV
+                </label>
+                <button type="button" class="btn outline" id="btnExportFull">Export all (Excel)</button>
+                <button type="button" class="btn outline" id="btnClearData">Clear data</button>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
 
     <div class="modal-backdrop" id="modalBackdrop" hidden>
       <div class="report-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <header class="report-header">
           <div>
-            <div class="school-name">Kendriya Vidyalaya NIT Agartala</div>
+            <div class="school-name" id="modalSchoolName">School name</div>
             <h2 class="report-title" id="modalTitle"></h2>
           </div>
           <button type="button" class="btn ghost" id="modalClose" aria-label="Close">×</button>
@@ -162,11 +366,12 @@
       </div>
     </div>
 
-    <!-- Bundled locally so PDF/Excel work offline and when CDNs are blocked -->
     <script src="vendor/jspdf.umd.min.js"></script>
     <script src="vendor/jspdf.plugin.autotable.min.js"></script>
     <script src="vendor/xlsx.full.min.js"></script>
+    <script src="sheets-webapp-config.js"></script>
     <script src="export-reports.js"></script>
+    <script src="sheets-sync.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -42,7 +42,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.2")
 }
 
-// Keep dashboard web assets in sync with ../browser-app on each build
+// Keep dashboard web assets in sync with ../browser-app on each build (includes sheets-webapp-config.js — paste Web app URL there only).
 tasks.register<Copy>("copyBrowserApp") {
     val src = rootProject.projectDir.resolve("../browser-app")
     if (!src.exists()) {

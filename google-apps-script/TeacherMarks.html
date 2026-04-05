@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><?= schoolName ?> — Teacher marks</title>
+    <style>
+      :root {
+        --maroon: #6b1c23;
+        --muted: #5c534c;
+        --border: #d9d0c8;
+        --surface2: #faf7f4;
+        --err: #b00020;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, Segoe UI, Roboto, sans-serif;
+        margin: 0;
+        background: #f5f2ef;
+        color: #1a1512;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+      .tm-brand-banner {
+        text-align: center;
+        padding: 14px 16px 10px;
+        background: linear-gradient(180deg, #faf7f4 0%, #f5f2ef 100%);
+        border-bottom: 1px solid var(--border);
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--maroon);
+        letter-spacing: 0.03em;
+        line-height: 1.4;
+      }
+      .tm-brand-class {
+        font-weight: 600;
+        color: #4a3728;
+      }
+      .wrap {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      .marks-card-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .marks-card-head h1 {
+        margin: 0;
+        font-size: 1.2rem;
+        color: var(--maroon);
+        flex: 1 1 auto;
+        min-width: 10rem;
+      }
+      .btn {
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-weight: 600;
+        font-size: 0.88rem;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .btn.primary {
+        background: var(--maroon);
+        color: #fff;
+        border-color: #4a1419;
+      }
+      .btn.success {
+        background: #2e7d32;
+        color: #fff;
+        border-color: #1b5e20;
+      }
+      .btn.pdf {
+        background: #c62828;
+        color: #fff;
+        border-color: #8e0000;
+      }
+      .btn.outline.sm {
+        padding: 8px 12px;
+        font-size: 0.82rem;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 18px 20px 22px;
+      }
+      .card-desc {
+        font-size: 0.88rem;
+        color: var(--muted);
+        margin: 0 0 12px;
+      }
+      .marks-picker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+        align-items: end;
+        margin-bottom: 10px;
+      }
+      label.field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      label.field select,
+      label.field input {
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.95rem;
+      }
+      .marks-picker-status {
+        margin: 0 0 12px;
+        font-size: 0.85rem;
+        color: var(--muted);
+        min-height: 1.2em;
+      }
+      .marks-quick-actions {
+        padding: 14px 16px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 14px;
+      }
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .marks-dynamic-area {
+        margin-top: 4px;
+      }
+      .marks-new-entry-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .tm-cancel-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: -4px 0 4px;
+      }
+      .btn.tm-btn-cancel-edit {
+        padding: 5px 10px;
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: #b71c1c;
+        background: #fff;
+        border: 1px solid #e57373;
+        border-radius: 6px;
+      }
+      .btn.tm-btn-cancel-edit:hover {
+        background: #ffebee;
+      }
+      .marks-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 12px;
+      }
+      table.data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .data-table th {
+        background: var(--maroon);
+        color: #fff;
+        text-align: left;
+        padding: 10px 12px;
+      }
+      .data-table td {
+        padding: 8px 12px;
+        border-top: 1px solid var(--border);
+      }
+      .marks-inp {
+        width: 100%;
+        max-width: 110px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      .marks-inp.invalid {
+        border-color: var(--err);
+        background: #fff5f5;
+      }
+      .cell-err {
+        font-size: 0.75rem;
+        color: var(--err);
+        display: block;
+        margin-top: 2px;
+      }
+      .tm-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      .tm-modal[hidden] {
+        display: none !important;
+      }
+      .tm-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+      }
+      .tm-modal-panel {
+        position: relative;
+        background: #fff;
+        border-radius: 10px;
+        padding: 20px 22px;
+        max-width: 520px;
+        max-height: 90vh;
+        overflow: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        border: 1px solid var(--border);
+      }
+      .tm-modal-panel h2 {
+        margin: 0 0 14px;
+        font-size: 1.05rem;
+        color: var(--maroon);
+      }
+      .tm-instr-list {
+        margin: 0 0 16px;
+        padding-left: 1.2rem;
+        line-height: 1.55;
+        color: #2a2420;
+      }
+      .tm-instr-list li {
+        margin-bottom: 10px;
+      }
+      @media print {
+        .tm-brand-banner {
+          border-bottom: none;
+          padding-bottom: 6px;
+        }
+        .marks-card-head .btn,
+        .tm-modal,
+        .tm-cancel-row,
+        .btn-row,
+        .marks-picker-grid,
+        .marks-picker-status {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="tm-brand-banner" role="banner">
+      <span class="tm-brand-school"><?= schoolName ?></span><?
+        var _tmcl = schoolClass && String(schoolClass).trim();
+        if (_tmcl && _tmcl !== "—") {
+      ?><span> · </span><span class="tm-brand-class"><?= schoolClass ?></span><?
+        }
+      ?>
+    </div>
+    <div class="wrap">
+      <div class="card">
+        <div class="marks-card-head">
+          <h1>Marks entry (teachers)</h1>
+          <button type="button" class="btn outline sm" id="tmBtnInstructions">Instructions</button>
+        </div>
+        <p class="card-desc">
+          Select <strong>examination</strong> and <strong>subject</strong> below. Open <strong>Instructions</strong> for a short guide.
+        </p>
+
+        <div class="marks-picker-grid">
+          <label class="field">
+            <span>Examination</span>
+            <select id="tmExam" aria-label="Examination">
+              <option value="">— Select —</option>
+              <option>PT1</option>
+              <option>PT2</option>
+              <option>Half Yearly</option>
+              <option>SEE</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Subject</span>
+            <select id="tmSubject" aria-label="Subject">
+              <option value="">— Select examination first —</option>
+            </select>
+          </label>
+        </div>
+        <p class="marks-picker-status" id="tmStatus"></p>
+
+        <div id="tmQuick" class="marks-quick-actions" hidden>
+          <p class="card-desc" id="tmSummary" style="margin-top: 0"></p>
+          <div class="btn-row">
+            <button type="button" class="btn primary" id="tmBtnEdit">Edit marks</button>
+            <button type="button" class="btn pdf" id="tmBtnDownload">Download mark slip</button>
+          </div>
+        </div>
+
+        <div id="tmDynamic" class="marks-dynamic-area" hidden>
+          <div id="tmEntry" class="marks-new-entry-section" hidden>
+            <div class="tm-cancel-row">
+              <button type="button" class="btn tm-btn-cancel-edit" id="tmBtnCancel" hidden>Cancel edit</button>
+            </div>
+            <div class="marks-meta-grid">
+              <label class="field">
+                <span>Maximum marks</span>
+                <input type="text" id="tmMax" inputmode="decimal" placeholder="e.g. 50" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Subject teacher</span>
+                <input type="text" id="tmTeacher" placeholder="Name" autocomplete="name" />
+              </label>
+              <label class="field">
+                <span>Date of examination</span>
+                <input type="date" id="tmDate" />
+              </label>
+            </div>
+            <table class="data-table" id="tmTable" hidden>
+              <thead>
+                <tr>
+                  <th>Roll No.</th>
+                  <th>Student name</th>
+                  <th>Marks obtained</th>
+                </tr>
+              </thead>
+              <tbody id="tmTbody"></tbody>
+            </table>
+            <div class="btn-row">
+              <button type="button" class="btn success" id="tmBtnSubmit">Submit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tmInstructionsModal" class="tm-modal" hidden aria-hidden="true">
+      <div class="tm-modal-backdrop" id="tmInstructionsBackdrop" aria-hidden="true"></div>
+      <div class="tm-modal-panel" role="dialog" aria-modal="true" aria-labelledby="tmInstrTitle">
+        <h2 id="tmInstrTitle">How to use this page</h2>
+        <ul class="tm-instr-list">
+          <li>Select <strong>Examination</strong>, then <strong>Subject</strong>.</li>
+          <li>
+            If marks are already saved for that pair, you will see <strong>Edit marks</strong> and
+            <strong>Download mark slip</strong>. Use them to change marks or get a PDF.
+          </li>
+          <li>
+            If nothing is saved yet, fill <strong>Maximum marks</strong>, <strong>Subject teacher</strong>, and
+            <strong>Date of examination</strong>, enter each student’s marks (numbers or <strong>AB</strong> for absent),
+            then tap <strong>Submit</strong>.
+          </li>
+          <li>
+            Use <strong>Enter</strong> or the up/down arrow keys to move between mark cells. Invalid values are
+            cleared with a short message; fix the cell before moving on.
+          </li>
+        </ul>
+        <button type="button" class="btn primary" id="tmBtnInstructionsClose">Close</button>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script>
+      window.__TM_BRANDING_SCHOOL__ = <?!= JSON.stringify(String(schoolName || "")) ?>;
+      window.__TM_BRANDING_CLASS__ = <?!= JSON.stringify(String(schoolClass != null ? schoolClass : "")) ?>;
+    </script>
+    <?!= include("TeacherMarksPdfInclude"); ?>
+
+    <script>
+      var TM_EXAMS = ["PT1", "PT2", "Half Yearly", "SEE"];
+      var TM_SUBJECTS = ["English", "Hindi", "Maths", "Science", "Social Science", "Sanskrit", "AI"];
+
+      var students = [];
+      var cachedSlips = [];
+      var pickerEditing = false;
+      var editingSlipId = null;
+      var resolvedSlip = null;
+
+      function api(action, payload) {
+        return new Promise(function (resolve, reject) {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(function (e) {
+              reject(new Error(e && e.message ? e.message : String(e)));
+            })
+            .teacherApi(action, payload || {});
+        });
+      }
+
+      function pad2(n) {
+        return n < 10 ? "0" + n : String(n);
+      }
+      function formatExamDateDisplay(ymd) {
+        if (!ymd || !String(ymd).trim()) return "";
+        var p = String(ymd).trim().split("-");
+        if (p.length === 3) return pad2(parseInt(p[2], 10)) + "/" + pad2(parseInt(p[1], 10)) + "/" + p[0];
+        return String(ymd);
+      }
+      function dateToDdMmYyyy(d) {
+        if (!d || isNaN(d.getTime())) return "";
+        return pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1) + "/" + d.getFullYear();
+      }
+      function formatSheetsDateForPdf(v) {
+        if (v == null || v === "") return "";
+        var s = typeof v === "string" ? v : String(v);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return formatExamDateDisplay(s.slice(0, 10));
+        var d = new Date(s);
+        if (!isNaN(d.getTime())) return dateToDdMmYyyy(d);
+        return s;
+      }
+
+      /** YYYY-MM-DD for &lt;input type="date"&gt; from sheet/API (ISO, Date string, or Date). */
+      function examDateToInputValue(v) {
+        if (v == null || v === "") return "";
+        if (typeof v === "string") {
+          var t = v.trim();
+          if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+        }
+        var d = v instanceof Date ? v : new Date(v);
+        if (isNaN(d.getTime())) return "";
+        var y = d.getFullYear();
+        var mo = d.getMonth() + 1;
+        var day = d.getDate();
+        return y + "-" + (mo < 10 ? "0" : "") + mo + "-" + (day < 10 ? "0" : "") + day;
+      }
+
+      /** dd/mm/yyyy at h:mm am/pm for saved-at / exam timestamps. */
+      function formatSubmittedWhen(raw) {
+        if (raw == null || String(raw).trim() === "") return "";
+        var s = String(raw).trim();
+        var d = new Date(s);
+        if (isNaN(d.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(s)) {
+          d = new Date(s.slice(0, 10) + "T12:00:00");
+        }
+        if (isNaN(d.getTime())) return "";
+        var datePart = dateToDdMmYyyy(d);
+        var h = d.getHours();
+        var mi = d.getMinutes();
+        var ampm = h >= 12 ? "pm" : "am";
+        var h12 = h % 12;
+        if (h12 === 0) h12 = 12;
+        var timePart = h12 + ":" + pad2(mi) + " " + ampm;
+        return datePart + " at " + timePart;
+      }
+
+      function slipMatchSum(ex, sub, row) {
+        return (
+          String(row.exam || "")
+            .trim()
+            .toLowerCase() === String(ex || "")
+              .trim()
+              .toLowerCase() &&
+          String(row.subject || "")
+            .trim()
+            .toLowerCase() === String(sub || "")
+              .trim()
+              .toLowerCase()
+        );
+      }
+
+      function collectExamKeys() {
+        var set = {};
+        var i;
+        for (i = 0; i < TM_EXAMS.length; i++) set[TM_EXAMS[i]] = true;
+        for (i = 0; i < cachedSlips.length; i++) {
+          var ex = String(cachedSlips[i].exam != null ? cachedSlips[i].exam : "").trim();
+          if (ex) set[ex] = true;
+        }
+        return Object.keys(set).sort(function (a, b) {
+          return a.localeCompare(b);
+        });
+      }
+
+      function collectSubjectKeys(exam) {
+        var ex = String(exam || "").trim();
+        var set = {};
+        var i;
+        for (i = 0; i < TM_SUBJECTS.length; i++) set[TM_SUBJECTS[i]] = true;
+        for (i = 0; i < cachedSlips.length; i++) {
+          if (String(cachedSlips[i].exam != null ? cachedSlips[i].exam : "").trim() !== ex) continue;
+          var su = String(cachedSlips[i].subject != null ? cachedSlips[i].subject : "").trim();
+          if (su) set[su] = true;
+        }
+        return Object.keys(set).sort(function (a, b) {
+          return a.localeCompare(b);
+        });
+      }
+
+      function rebuildExamSelect() {
+        var sel = document.getElementById("tmExam");
+        var cur = sel.value;
+        var keys = collectExamKeys();
+        sel.innerHTML = '<option value="">— Select —</option>';
+        for (var j = 0; j < keys.length; j++) {
+          var o = document.createElement("option");
+          o.value = keys[j];
+          o.textContent = keys[j];
+          sel.appendChild(o);
+        }
+        if (cur && keys.indexOf(cur) >= 0) sel.value = cur;
+      }
+
+      function rebuildSubjectSelect(exam) {
+        var sel = document.getElementById("tmSubject");
+        var cur = sel.value;
+        var keys = exam ? collectSubjectKeys(exam) : [];
+        sel.innerHTML = exam
+          ? '<option value="">— Select —</option>'
+          : '<option value="">— Select examination first —</option>';
+        for (var j = 0; j < keys.length; j++) {
+          var o = document.createElement("option");
+          o.value = keys[j];
+          o.textContent = keys[j];
+          sel.appendChild(o);
+        }
+        if (cur && keys.indexOf(cur) >= 0) sel.value = cur;
+      }
+
+      function resolveSlipForPicker(ex, sub) {
+        var list = cachedSlips.filter(function (s) {
+          return slipMatchSum(ex, sub, s);
+        });
+        if (!list.length) return { available: false };
+        list.sort(function (a, b) {
+          return String(b.savedAt || "").localeCompare(String(a.savedAt || ""));
+        });
+        var sh = list[0];
+        return { available: true, source: "sheet", slipId: sh.slipId, summary: sh };
+      }
+
+      function buildSummaryLine(res) {
+        if (!res || !res.available || !res.summary) return "";
+        var s = res.summary;
+        var teacher = String(s.teacher != null ? s.teacher : "").trim() || "—";
+        var whenRaw = String(s.savedAt != null ? s.savedAt : "").trim();
+        if (!whenRaw) whenRaw = String(s.examDate != null ? s.examDate : "").trim();
+        var whenFmt = formatSubmittedWhen(whenRaw);
+        if (!whenFmt) whenFmt = "an unknown date and time";
+        return "Marks already entered by " + teacher + " on " + whenFmt + ".";
+      }
+
+      function sheetApiToRecord(meta, entries, slipId) {
+        var ent = [];
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          ent.push({
+            studentId: e.studentId,
+            rollNo: e.rollNo,
+            studentName: e.studentName,
+            marks: e.marks,
+          });
+        }
+        return {
+          id: slipId,
+          savedAt: meta.savedAt || "",
+          maxMarks: meta.maxMarks,
+          teacherName: meta.teacherName || "",
+          examDate: meta.examDate || "",
+          subject: meta.subject || "",
+          examName: meta.examName || "",
+          entries: ent,
+        };
+      }
+
+      function sheetsMetaToPdfMeta(meta) {
+        var mm = Number(meta.maxMarks);
+        if (isNaN(mm) || mm <= 0) mm = 1;
+        return {
+          subject: String(meta.subject || ""),
+          examName: String(meta.examName || ""),
+          examDateDisplay: formatSheetsDateForPdf(meta.examDate),
+          maxMarks: mm,
+          teacherName: String(meta.teacherName || ""),
+        };
+      }
+
+      function sheetsEntriesToPdfRows(meta, entries) {
+        var maxMarks = Number(meta.maxMarks);
+        if (isNaN(maxMarks) || maxMarks <= 0) maxMarks = 1;
+        var rows = [];
+        for (var si = 0; si < entries.length; si++) {
+          var e = entries[si];
+          var m = String(e.marks != null ? e.marks : "").trim();
+          var isAb = /^ab$/i.test(m);
+          var n = parseFloat(m.replace(/,/g, "."));
+          var pctDisplay = isAb ? "—" : !isNaN(n) ? ((n / maxMarks) * 100).toFixed(2) + "%" : "—";
+          rows.push({
+            roll: String(e.rollNo != null ? e.rollNo : ""),
+            name: String(e.studentName != null ? e.studentName : ""),
+            marksDisplay: isAb ? "AB" : m,
+            pctDisplay: pctDisplay,
+          });
+        }
+        return rows;
+      }
+
+      function isDataStudentRow(s) {
+        if (String(s["R.NO."] != null ? s["R.NO."] : "").trim() !== "") return true;
+        if (String(s["Student Name"] != null ? s["Student Name"] : "").trim() !== "") return true;
+        return false;
+      }
+
+      function studentsForMarksEntry(list) {
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+          if (isDataStudentRow(list[i])) out.push(list[i]);
+        }
+        out.sort(function (a, b) {
+          var sa = String(a["R.NO."] != null ? a["R.NO."] : "").trim();
+          var sb = String(b["R.NO."] != null ? b["R.NO."] : "").trim();
+          var na = parseFloat(sa.replace(/[^\d.]/g, ""));
+          var nb = parseFloat(sb.replace(/[^\d.]/g, ""));
+          if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+          return sa.localeCompare(sb, undefined, { numeric: true });
+        });
+        return out;
+      }
+
+      function marksStudentPersistId(st) {
+        return String(st["R.NO."] != null ? st["R.NO."] : "").trim();
+      }
+
+      function marksStudentDomKey(st) {
+        var r = marksStudentPersistId(st);
+        return r || "__nir_" + String(st.id);
+      }
+
+      function findEntryForStudent(record, st) {
+        var roll = marksStudentPersistId(st);
+        var nm = String(st["Student Name"] || "").trim();
+        var ent = record.entries || [];
+        var i;
+        for (i = 0; i < ent.length; i++) {
+          if (String(ent[i].studentId) === roll) return ent[i];
+        }
+        var sid = String(st.id);
+        for (i = 0; i < ent.length; i++) {
+          if (String(ent[i].studentId) === sid) return ent[i];
+        }
+        for (var j = 0; j < ent.length; j++) {
+          if (
+            String(ent[j].rollNo || "").trim() === roll &&
+            String(ent[j].studentName || "").trim() === nm
+          )
+            return ent[j];
+        }
+        return null;
+      }
+
+      function normalizeMarksInput(raw, maxMarks) {
+        var s = String(raw).trim();
+        if (!s) return { error: "Enter marks or AB for every student." };
+        if (/^a(b)?$/i.test(s)) return { ok: true, isAb: true, display: "AB" };
+        var n = parseFloat(s.replace(/,/g, "."));
+        if (isNaN(n)) return { error: "Invalid marks — use a number or AB." };
+        if (n < 0) return { error: "Marks cannot be negative." };
+        if (n > maxMarks) return { error: "Marks cannot exceed maximum (" + maxMarks + ")." };
+        return { ok: true, isAb: false, num: n, display: s };
+      }
+
+      function normalizeAbsentOnBlur(inp) {
+        var s = String(inp.value).trim();
+        if (/^a(b)?$/i.test(s)) {
+          inp.value = "AB";
+          return true;
+        }
+        return false;
+      }
+
+      function getMaxN() {
+        var maxStr = String(document.getElementById("tmMax").value).trim();
+        return parseFloat(maxStr.replace(/,/g, "."));
+      }
+
+      function validateMarksRealtime(raw, maxMarks) {
+        if (maxMarks == null || isNaN(maxMarks) || maxMarks <= 0) {
+          return { level: "nomax", message: "Set maximum marks first." };
+        }
+        var s = String(raw).trim();
+        if (!s) return { level: "empty" };
+        if (/^a(b)?$/i.test(s)) return { level: "ok" };
+        if (/[a-z]/i.test(s)) return { level: "bad", message: "Use digits or AB only." };
+        if (!/^\d*\.?\d*$/.test(s)) return { level: "bad", message: "Invalid marks." };
+        var n = parseFloat(s.replace(/,/g, "."));
+        if (isNaN(n)) return { level: "partial" };
+        if (n < 0) return { level: "bad", message: "Cannot be negative." };
+        if (n > maxMarks) return { level: "bad", message: "Cannot exceed " + maxMarks + "." };
+        return { level: "ok" };
+      }
+
+      function validateCell(inp) {
+        var maxN = getMaxN();
+        var wrap = inp.parentNode;
+        var errSpan = wrap.querySelector(".cell-err");
+        inp.classList.remove("invalid");
+        if (errSpan) errSpan.textContent = "";
+        var v = validateMarksRealtime(inp.value, maxN);
+        if (v.level === "nomax") {
+          if (String(inp.value).trim()) {
+            inp.classList.add("invalid");
+            if (errSpan) errSpan.textContent = v.message;
+          }
+          return;
+        }
+        if (v.level === "bad") {
+          inp.classList.add("invalid");
+          if (errSpan) errSpan.textContent = v.message;
+        }
+      }
+
+      function tmMarksBlocksNav(inp) {
+        if (!inp) return false;
+        var v = validateMarksRealtime(inp.value, getMaxN());
+        if (v.level === "bad") return true;
+        if (v.level === "nomax" && String(inp.value).trim()) return true;
+        return false;
+      }
+
+      function tmMarksNavWarn(inp) {
+        var v = validateMarksRealtime(inp.value, getMaxN());
+        if (v.message) return v.message;
+        return "Fix this cell before moving to the next.";
+      }
+
+      function revalidateAll() {
+        document.querySelectorAll(".marks-inp").forEach(function (inp) {
+          validateCell(inp);
+        });
+      }
+
+      function renderTable() {
+        var tb = document.getElementById("tmTbody");
+        var table = document.getElementById("tmTable");
+        tb.innerHTML = "";
+        var list = studentsForMarksEntry(students);
+        if (!list.length) {
+          table.hidden = true;
+          return;
+        }
+        table.hidden = false;
+        var record = window.__tmEditRecord || null;
+        for (var i = 0; i < list.length; i++) {
+          var st = list[i];
+          var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
+          var nm = String(st["Student Name"] || "").trim() || "—";
+          var key = marksStudentDomKey(st);
+          var tr = document.createElement("tr");
+          var td1 = document.createElement("td");
+          td1.textContent = roll;
+          var td2 = document.createElement("td");
+          td2.textContent = nm;
+          var td3 = document.createElement("td");
+          var wrap = document.createElement("div");
+          var inp = document.createElement("input");
+          inp.type = "text";
+          inp.className = "marks-inp";
+          inp.setAttribute("data-key", key);
+          inp.autocomplete = "off";
+          if (record) {
+            var en = findEntryForStudent(record, st);
+            if (en) {
+              var mk = en.marks;
+              var ms = String(mk != null ? mk : "").trim();
+              if (ms === "" || /^ab$/i.test(ms)) inp.value = /^ab$/i.test(ms) ? "AB" : "";
+              else if (typeof mk === "number" && mk % 1 === 0) inp.value = String(mk);
+              else inp.value = ms;
+            }
+          }
+          var errSpan = document.createElement("span");
+          errSpan.className = "cell-err";
+          wrap.appendChild(inp);
+          wrap.appendChild(errSpan);
+          td3.appendChild(wrap);
+          tr.appendChild(td1);
+          tr.appendChild(td2);
+          tr.appendChild(td3);
+          tb.appendChild(tr);
+          inp.addEventListener("input", function () {
+            validateCell(this);
+          });
+          inp.addEventListener("blur", function () {
+            normalizeAbsentOnBlur(this);
+            validateCell(this);
+          });
+          inp.addEventListener("keydown", function (ev) {
+            var all = [].slice.call(document.querySelectorAll(".marks-inp"));
+            var ix = all.indexOf(this);
+            if (ev.key === "Enter" || ev.key === "ArrowDown") {
+              if (tmMarksBlocksNav(this)) {
+                ev.preventDefault();
+                alert(tmMarksNavWarn(this));
+                this.value = "";
+                validateCell(this);
+                this.focus();
+                return;
+              }
+              ev.preventDefault();
+              if (all[ix + 1]) all[ix + 1].focus();
+            } else if (ev.key === "ArrowUp") {
+              if (tmMarksBlocksNav(this)) {
+                ev.preventDefault();
+                alert(tmMarksNavWarn(this));
+                this.value = "";
+                validateCell(this);
+                this.focus();
+                return;
+              }
+              ev.preventDefault();
+              if (all[ix - 1]) all[ix - 1].focus();
+            }
+          });
+        }
+        revalidateAll();
+      }
+
+      function updatePickerUI() {
+        var stEl = document.getElementById("tmStatus");
+        var quick = document.getElementById("tmQuick");
+        var dyn = document.getElementById("tmDynamic");
+        var entry = document.getElementById("tmEntry");
+        var ex = document.getElementById("tmExam").value.trim();
+        var sub = document.getElementById("tmSubject").value.trim();
+        if (!ex || !sub) {
+          stEl.textContent = "";
+          quick.hidden = true;
+          dyn.hidden = true;
+          entry.hidden = true;
+          resolvedSlip = null;
+          return;
+        }
+        if (pickerEditing) {
+          quick.hidden = true;
+          dyn.hidden = false;
+          entry.hidden = false;
+          stEl.textContent = "Editing — Submit to save, or Cancel.";
+          return;
+        }
+        var res = resolveSlipForPicker(ex, sub);
+        resolvedSlip = res;
+        if (res.available) {
+          quick.hidden = false;
+          dyn.hidden = true;
+          entry.hidden = true;
+          stEl.textContent = "";
+          document.getElementById("tmSummary").textContent = buildSummaryLine(res);
+        } else {
+          quick.hidden = true;
+          dyn.hidden = false;
+          entry.hidden = false;
+          stEl.textContent = "No marks on file yet — enter details below and Submit.";
+          window.__tmEditRecord = null;
+          document.getElementById("tmMax").value = "";
+          document.getElementById("tmTeacher").value = "";
+          document.getElementById("tmDate").value = "";
+          editingSlipId = null;
+          document.getElementById("tmBtnCancel").hidden = true;
+          renderTable();
+        }
+      }
+
+      function applySlipToForm(rec) {
+        if (!rec) return;
+        document.getElementById("tmMax").value = String(rec.maxMarks != null ? rec.maxMarks : "");
+        document.getElementById("tmTeacher").value = String(rec.teacherName || "");
+        document.getElementById("tmDate").value = examDateToInputValue(rec.examDate);
+        var ex = rec.examName || "";
+        var su = rec.subject || "";
+        if (collectExamKeys().indexOf(ex) < 0) {
+          var o = document.createElement("option");
+          o.value = ex;
+          o.textContent = ex;
+          document.getElementById("tmExam").appendChild(o);
+        }
+        document.getElementById("tmExam").value = ex;
+        rebuildSubjectSelect(ex);
+        if (collectSubjectKeys(ex).indexOf(su) < 0) {
+          var o2 = document.createElement("option");
+          o2.value = su;
+          o2.textContent = su;
+          document.getElementById("tmSubject").appendChild(o2);
+        }
+        document.getElementById("tmSubject").value = su;
+        editingSlipId = rec.id;
+        window.__tmEditRecord = rec;
+        document.getElementById("tmBtnCancel").hidden = false;
+        renderTable();
+        pickerEditing = true;
+        updatePickerUI();
+      }
+
+      function clearEditMode() {
+        pickerEditing = false;
+        editingSlipId = null;
+        window.__tmEditRecord = null;
+        document.getElementById("tmBtnCancel").hidden = true;
+        renderTable();
+        updatePickerUI();
+      }
+
+      function syncSlipsThenRefresh() {
+        return api("listMarkSlips", {}).then(function (data) {
+          cachedSlips = data.slips || [];
+          rebuildExamSelect();
+          rebuildSubjectSelect(document.getElementById("tmExam").value.trim());
+          updatePickerUI();
+        });
+      }
+
+      document.getElementById("tmExam").addEventListener("change", function () {
+        rebuildSubjectSelect(this.value);
+        pickerEditing = false;
+        editingSlipId = null;
+        window.__tmEditRecord = null;
+        document.getElementById("tmBtnCancel").hidden = true;
+        updatePickerUI();
+      });
+
+      document.getElementById("tmSubject").addEventListener("change", function () {
+        pickerEditing = false;
+        editingSlipId = null;
+        window.__tmEditRecord = null;
+        document.getElementById("tmBtnCancel").hidden = true;
+        updatePickerUI();
+      });
+
+      document.getElementById("tmBtnEdit").addEventListener("click", function () {
+        var res = resolvedSlip;
+        if (!res || !res.available) return;
+        api("getMarkSlip", { slipId: res.slipId })
+          .then(function (data) {
+            var rec = sheetApiToRecord(data.meta, data.entries, res.slipId);
+            applySlipToForm(rec);
+          })
+          .catch(function (e) {
+            alert(e.message || String(e));
+          });
+      });
+
+      document.getElementById("tmBtnDownload").addEventListener("click", function () {
+        var res = resolvedSlip;
+        if (!res || !res.available) return;
+        api("getMarkSlip", { slipId: res.slipId })
+          .then(function (data) {
+            var pdfMeta = sheetsMetaToPdfMeta(data.meta);
+            var pdfRows = sheetsEntriesToPdfRows(data.meta, data.entries);
+            if (typeof tmDownloadMarksSlipPdf === "function") {
+              tmDownloadMarksSlipPdf(pdfMeta, pdfRows);
+            } else {
+              alert("PDF helper missing.");
+            }
+          })
+          .catch(function (e) {
+            alert(e.message || String(e));
+          });
+      });
+
+      document.getElementById("tmBtnCancel").addEventListener("click", clearEditMode);
+
+      (function setupInstructionsModal() {
+        var modal = document.getElementById("tmInstructionsModal");
+        function openInstr() {
+          modal.hidden = false;
+          modal.setAttribute("aria-hidden", "false");
+        }
+        function closeInstr() {
+          modal.hidden = true;
+          modal.setAttribute("aria-hidden", "true");
+        }
+        document.getElementById("tmBtnInstructions").addEventListener("click", openInstr);
+        document.getElementById("tmBtnInstructionsClose").addEventListener("click", closeInstr);
+        document.getElementById("tmInstructionsBackdrop").addEventListener("click", closeInstr);
+        document.addEventListener("keydown", function (ev) {
+          if (ev.key === "Escape" && !modal.hidden) closeInstr();
+        });
+      })();
+
+      document.getElementById("tmMax").addEventListener("input", revalidateAll);
+
+      document.getElementById("tmBtnSubmit").addEventListener("click", function () {
+        var ex = document.getElementById("tmExam").value.trim();
+        var sub = document.getElementById("tmSubject").value.trim();
+        var maxStr = document.getElementById("tmMax").value.trim();
+        var maxMarks = parseFloat(maxStr.replace(/,/g, "."));
+        if (!maxStr || isNaN(maxMarks) || maxMarks <= 0) {
+          alert("Enter valid maximum marks.");
+          return;
+        }
+        revalidateAll();
+        if (document.querySelector(".marks-inp.invalid")) {
+          alert("Fix cells in red.");
+          return;
+        }
+        var teacher = document.getElementById("tmTeacher").value.trim();
+        if (!teacher) {
+          alert("Enter subject teacher name.");
+          return;
+        }
+        var examDate = document.getElementById("tmDate").value;
+        if (!examDate) {
+          alert("Select examination date.");
+          return;
+        }
+        var list = studentsForMarksEntry(students);
+        var entries = [];
+        for (var i = 0; i < list.length; i++) {
+          var st = list[i];
+          var want = marksStudentDomKey(st);
+          var inp = null;
+          var nodes = document.querySelectorAll(".marks-inp");
+          for (var j = 0; j < nodes.length; j++) {
+            if (nodes[j].getAttribute("data-key") === want) {
+              inp = nodes[j];
+              break;
+            }
+          }
+          if (!inp) {
+            alert("Could not read marks for all students.");
+            return;
+          }
+          normalizeAbsentOnBlur(inp);
+          var v = normalizeMarksInput(inp.value, maxMarks);
+          if (v.error) {
+            alert(v.error);
+            return;
+          }
+          var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
+          var nm = String(st["Student Name"] || "").trim() || "—";
+          entries.push({
+            studentId: marksStudentPersistId(st),
+            rollNo: roll,
+            studentName: nm,
+            marks: v.isAb ? "AB" : v.num,
+          });
+        }
+        var record = {
+          id: editingSlipId ? editingSlipId : Date.now(),
+          savedAt: new Date().toISOString(),
+          maxMarks: maxMarks,
+          teacherName: teacher,
+          examDate: examDate,
+          examName: ex,
+          subject: sub,
+          entries: entries,
+        };
+        var action = editingSlipId ? "replaceMarkSlip" : "saveMarkSlip";
+        api(action, { record: record })
+          .then(function (res) {
+            if (res && res.slipId) editingSlipId = String(res.slipId);
+            pickerEditing = false;
+            window.__tmEditRecord = null;
+            document.getElementById("tmBtnCancel").hidden = true;
+            return syncSlipsThenRefresh();
+          })
+          .then(function () {
+            alert(action === "replaceMarkSlip" ? "Marks updated successfully." : "Marks submitted successfully.");
+          })
+          .catch(function (e) {
+            alert(e.message || String(e));
+          });
+      });
+
+      Promise.all([api("getStudents", {}), api("listMarkSlips", {})])
+        .then(function (out) {
+          students = out[0].students || [];
+          cachedSlips = out[1].slips || [];
+          rebuildExamSelect();
+          rebuildSubjectSelect("");
+          document.getElementById("tmStatus").textContent = "";
+          updatePickerUI();
+        })
+        .catch(function (e) {
+          document.getElementById("tmStatus").textContent = e.message || String(e);
+        });
+    </script>
+  </body>
+</html>

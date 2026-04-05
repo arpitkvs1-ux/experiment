@@ -1,0 +1,256 @@
+<script>
+  var TM_SCHOOL =
+    typeof window.__TM_BRANDING_SCHOOL__ === "string" && window.__TM_BRANDING_SCHOOL__.trim()
+      ? window.__TM_BRANDING_SCHOOL__.trim()
+      : "School";
+  var TM_CLASS_LINE =
+    typeof window.__TM_BRANDING_CLASS__ === "string" && window.__TM_BRANDING_CLASS__.trim() && window.__TM_BRANDING_CLASS__.trim() !== "—"
+      ? window.__TM_BRANDING_CLASS__.trim()
+      : "";
+  var TM_MAROON = [107, 28, 46];
+  var TM_SUBTITLE_RGB = [217, 48, 37];
+  function tmSafeFilePart(title) {
+    var t = (title || "Student_Report").toString().replace(/["']/g, "").trim();
+    return t.replace(/[^\w\u0900-\u097F\- ]+/g, "").replace(/\s+/g, "_") || "Report";
+  }
+  function tmGetJsPDF() {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    if (typeof window.jsPDF === "function") return window.jsPDF;
+    return null;
+  }
+  function tmEnsureAutoTable() {
+    try {
+      var J = tmGetJsPDF();
+      if (J && typeof window.applyPlugin === "function" && typeof J.API.autoTable !== "function") {
+        window.applyPlugin(J);
+      }
+    } catch (e) {}
+  }
+  function tmRunAutoTable(doc, tableOpts) {
+    tmEnsureAutoTable();
+    if (typeof doc.autoTable === "function") {
+      doc.autoTable(tableOpts);
+      return true;
+    }
+    if (typeof window.autoTable === "function") {
+      window.autoTable(doc, tableOpts);
+      return true;
+    }
+    return false;
+  }
+  function tmDownloadMarksSlipPdf(meta, rows) {
+    if (!rows || !rows.length) {
+      alert("No students to include on the marks slip.");
+      return;
+    }
+    var JsPDF = tmGetJsPDF();
+    if (!JsPDF) {
+      alert("PDF libraries failed to load. Check your network or try again.");
+      return;
+    }
+    tmEnsureAutoTable();
+    var doc = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 5;
+    var gutter = 4;
+    var midX = pageW / 2;
+    var leftEnd = midX - gutter / 2;
+    var rightStart = midX + gutter / 2;
+    var leftCenter = (margin + leftEnd) / 2;
+    var rightCenter = (rightStart + pageW - margin) / 2;
+    var leftContentW = leftEnd - margin;
+    var rightContentW = pageW - margin - rightStart;
+    var subTitle = TM_CLASS_LINE ? "Marks statement — " + TM_CLASS_LINE : "Marks statement";
+    var subj = String(meta.subject || "—");
+    var ex = String(meta.examName || "—");
+    var dt = String(meta.examDateDisplay || "—");
+    var mx = String(meta.maxMarks);
+    var te = String(meta.teacherName || "—");
+    var metaLines = ["Subject: " + subj, "Exam: " + ex, "Date: " + dt, "Max marks: " + mx, "Teacher: " + te];
+    var head5 = [["Roll No.", "Name", "Marks", "Max", "%"]];
+    var body5 = [];
+    for (var ri = 0; ri < rows.length; ri++) {
+      var r = rows[ri];
+      body5.push([
+        String(r.roll || "—"),
+        String(r.name || "—"),
+        String(r.marksDisplay || "—"),
+        String(meta.maxMarks),
+        String(r.pctDisplay || "—"),
+      ]);
+    }
+    var n = body5.length;
+    var RESERVE_BELOW_TABLE = 10.2;
+    var GAP_AFTER_TABLE = 1.6;
+    var yTop = margin + 3;
+    function buildScaleFromFs(fs) {
+      return {
+        fontSize: fs,
+        headFontSize: Math.min(fs + 0.65, 9),
+        cellPadding: Math.max(0.22, Math.min(1.28, fs * 0.135)),
+        minCellHeight: Math.max(3.35, Math.min(7.1, fs * 0.94)),
+        titleFs: Math.max(7.6, Math.min(10.2, fs + 2.05)),
+        subFs: Math.max(6.6, Math.min(8.8, fs + 0.9)),
+        metaFs: Math.max(5.35, Math.min(7.1, fs - 0.38)),
+        metaLineGap: Math.max(2.2, Math.min(3.45, fs * 0.41)),
+      };
+    }
+    function headerHeightMm(scale) {
+      return (
+        yTop - margin + scale.titleFs * 0.35 + 1.2 + scale.subFs * 0.35 + 2.2 + metaLines.length * scale.metaLineGap + 2
+      );
+    }
+    function tableBlockEstimateMm(fs, numRows) {
+      var scale = buildScaleFromFs(fs);
+      var pad = scale.cellPadding;
+      var minH = scale.minCellHeight;
+      var hHead = minH * 1.08 + pad * 2.1;
+      var hRow = minH + pad * 0.85;
+      return hHead + numRows * hRow * 1.1;
+    }
+    function totalColumnHeightMm(fs, numRows) {
+      var scale = buildScaleFromFs(fs);
+      return headerHeightMm(scale) + tableBlockEstimateMm(fs, numRows) + RESERVE_BELOW_TABLE;
+    }
+    var usableH = pageH - 2 * margin;
+    var inner = (usableH - RESERVE_BELOW_TABLE - 2) * 0.88;
+    if (inner < 22) inner = 22;
+    var lo = 5.0;
+    var hi = 9.35;
+    var bi;
+    for (bi = 0; bi < 22; bi++) {
+      var mid = (lo + hi) / 2;
+      if (totalColumnHeightMm(mid, n) <= inner) lo = mid;
+      else hi = mid;
+    }
+    var scale = buildScaleFromFs(lo);
+    function drawCenteredMeta(cx, y0, maxW, scaleObj) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(scaleObj.metaFs);
+      doc.setTextColor(0, 0, 0);
+      var yy = y0;
+      for (var li = 0; li < metaLines.length; li++) {
+        doc.text(metaLines[li], cx, yy, { align: "center", maxWidth: maxW });
+        yy += scaleObj.metaLineGap;
+      }
+      return yy;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(scale.titleFs);
+    doc.setTextColor(0, 51, 102);
+    doc.text(TM_SCHOOL, leftCenter, yTop, { align: "center", maxWidth: leftContentW - 1 });
+    doc.text(TM_SCHOOL, rightCenter, yTop, { align: "center", maxWidth: rightContentW - 1 });
+    doc.setFontSize(scale.subFs);
+    doc.setTextColor(TM_SUBTITLE_RGB[0], TM_SUBTITLE_RGB[1], TM_SUBTITLE_RGB[2]);
+    doc.text(subTitle, leftCenter, yTop + scale.titleFs * 0.35 + 1.2, {
+      align: "center",
+      maxWidth: leftContentW - 2,
+    });
+    doc.text(subTitle, rightCenter, yTop + scale.titleFs * 0.35 + 1.2, {
+      align: "center",
+      maxWidth: rightContentW - 2,
+    });
+    var yMeta = yTop + scale.titleFs * 0.35 + 1.2 + scale.subFs * 0.35 + 2.2;
+    var yAfterLeftMeta = drawCenteredMeta(leftCenter, yMeta, leftContentW - 2, scale);
+    var yAfterRightMeta = drawCenteredMeta(rightCenter, yMeta, rightContentW - 2, scale);
+    var tableStartY = Math.max(yAfterLeftMeta, yAfterRightMeta) + 2;
+    var tableBottomLimit = pageH - margin - RESERVE_BELOW_TABLE;
+    var marginBottomMm = pageH - tableBottomLimit;
+    var rollW = 13;
+    var marksW = 11;
+    var maxWc = 11;
+    var pctW = 11;
+    var nameWLeft = Math.max(14, leftContentW - rollW - marksW - maxWc - pctW);
+    var nameWRight = Math.max(14, rightContentW - rollW - marksW - maxWc - pctW);
+    var tableCommon = {
+      head: head5,
+      body: body5,
+      theme: "grid",
+      styles: {
+        fontSize: scale.fontSize,
+        cellPadding: scale.cellPadding,
+        minCellHeight: scale.minCellHeight,
+        valign: "middle",
+        overflow: "linebreak",
+      },
+      headStyles: {
+        fillColor: TM_MAROON,
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: scale.headFontSize,
+        halign: "center",
+        valign: "middle",
+      },
+      horizontalPageBreak: false,
+      didDrawPage: function () {
+        doc.setDrawColor(190);
+        doc.setLineWidth(0.35);
+        doc.line(midX, margin + 1, midX, pageH - margin - 1);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(Math.max(5, scale.metaFs - 0.5));
+        doc.setTextColor(128);
+        doc.text(TM_SCHOOL, leftCenter, pageH - 4, { align: "center", maxWidth: leftContentW - 2 });
+        doc.text(TM_SCHOOL, rightCenter, pageH - 4, { align: "center", maxWidth: rightContentW - 2 });
+        doc.setTextColor(0);
+      },
+    };
+    var leftOpts = {};
+    for (var ka in tableCommon) leftOpts[ka] = tableCommon[ka];
+    leftOpts.startY = tableStartY;
+    leftOpts.margin = { left: margin, right: pageW - leftEnd, bottom: marginBottomMm };
+    leftOpts.tableWidth = leftContentW;
+    leftOpts.columnStyles = {
+      0: { halign: "center", cellWidth: rollW },
+      1: { cellWidth: nameWLeft, halign: "left", valign: "top" },
+      2: { halign: "center", cellWidth: marksW },
+      3: { halign: "center", cellWidth: maxWc },
+      4: { halign: "center", cellWidth: pctW },
+    };
+    var rightOpts = {};
+    for (var kb in tableCommon) rightOpts[kb] = tableCommon[kb];
+    rightOpts.startY = tableStartY;
+    rightOpts.margin = { left: rightStart, right: margin, bottom: marginBottomMm };
+    rightOpts.tableWidth = rightContentW;
+    rightOpts.columnStyles = {
+      0: { halign: "center", cellWidth: rollW },
+      1: { cellWidth: nameWRight, halign: "left", valign: "top" },
+      2: { halign: "center", cellWidth: marksW },
+      3: { halign: "center", cellWidth: maxWc },
+      4: { halign: "center", cellWidth: pctW },
+    };
+    if (!tmRunAutoTable(doc, leftOpts)) {
+      alert("PDF table plugin did not load.");
+      return;
+    }
+    var yLeft = doc.lastAutoTable && doc.lastAutoTable.finalY != null ? doc.lastAutoTable.finalY : tableStartY;
+    if (typeof doc.setPage === "function") doc.setPage(1);
+    if (!tmRunAutoTable(doc, rightOpts)) return;
+    var yRight = doc.lastAutoTable && doc.lastAutoTable.finalY != null ? doc.lastAutoTable.finalY : tableStartY;
+    var finalY = Math.max(yLeft, yRight) + GAP_AFTER_TABLE;
+    var sigY = finalY;
+    var sigMax = pageH - margin - RESERVE_BELOW_TABLE + 2;
+    if (sigY > sigMax) sigY = sigMax;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(Math.max(5, scale.fontSize - 0.6));
+    doc.setTextColor(0, 0, 0);
+    var labels = ["Subject teacher", "Exam. I/C", "Principal"];
+    var lw = leftEnd - margin - 2;
+    var rw = pageW - margin - rightStart - 2;
+    var c;
+    for (c = 0; c < 3; c++) {
+      var xl = margin + 1 + (lw * c) / 3 + lw / 6;
+      doc.text("_____________", xl, sigY, { align: "center" });
+      doc.text(labels[c], xl, sigY + 3.5, { align: "center" });
+    }
+    var c2;
+    for (c2 = 0; c2 < 3; c2++) {
+      var xr = rightStart + 1 + (rw * c2) / 3 + rw / 6;
+      doc.text("_____________", xr, sigY, { align: "center" });
+      doc.text(labels[c2], xr, sigY + 3.5, { align: "center" });
+    }
+    var part =
+      tmSafeFilePart(meta.subject) + "_" + tmSafeFilePart(meta.examName) + "_" + tmSafeFilePart(meta.examDateDisplay || "slip");
+    doc.save("KV_MarksSlip_" + part + ".pdf");
+  }
+</script>
