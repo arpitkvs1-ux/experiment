@@ -3,6 +3,26 @@
 
   var STORAGE_KEY = "kv_studentapp_v1";
   var MARKS_STORAGE_KEY = "kv_marksheets_v1";
+  var MARKS_PENDING_KEY = "kv_marks_pending_v1";
+  var CONS_STATUS_CACHE_KEY = "kv_cons_status_cache_v1";
+  var CONS_ABSENT_CACHE_KEY = "kv_cons_absent_cache_v1";
+  var SHEET_SLIP_DETAIL_CACHE_KEY = "kv_sheet_slip_detail_cache_v1";
+  var MARKS_ENTRY_DISABLED_MSG =
+    "Marks Entry/Edit is currently disabled. Please contact the class teacher";
+
+  function formatShortUserMessage(raw, maxLen) {
+    maxLen = maxLen || 160;
+    var s = String(raw == null ? "" : raw)
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<[^>]+>/g, " ");
+    s = s.replace(/\s+/g, " ").trim();
+    if (!s) return "Something went wrong.";
+    if (/DOCTYPE|<html|\.google\.com\/macros/i.test(s) && s.length > 50) {
+      return "Network or server error. Check connection and web app URL.";
+    }
+    if (s.length > maxLen) return s.slice(0, maxLen - 1) + "\u2026";
+    return s;
+  }
 
   var HEADERS = [
     "R.NO.",
@@ -34,8 +54,63 @@
     "PEN",
     "Reimbursement Claimed",
     "Total Quarterly Fee",
+    "Photo",
     "REMARK",
   ];
+
+  /** Raw Photo field from row (sheet header may be Photo / photo). */
+  function studentPhotoRawFromRow(st) {
+    if (!st || typeof st !== "object") return "";
+    if (st.Photo != null && String(st.Photo).trim() !== "") return String(st.Photo).trim();
+    var k;
+    for (k in st) {
+      if (!Object.prototype.hasOwnProperty.call(st, k)) continue;
+      if (/^photo$/i.test(String(k).trim()) && st[k] != null && String(st[k]).trim() !== "") {
+        return String(st[k]).trim();
+      }
+    }
+    return "";
+  }
+
+  /** Google Drive share links are HTML pages; use thumbnail endpoint for &lt;img src&gt; (file must be shared). */
+  function normalizePhotoUrlForImg(url) {
+    if (!url) return "";
+    var u = String(url).trim();
+    var dm = u.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+    if (dm) return "https://drive.google.com/thumbnail?id=" + dm[1] + "&sz=s400";
+    if (/drive\.google\.com\/open\?/i.test(u)) {
+      var om = u.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
+      if (om) return "https://drive.google.com/thumbnail?id=" + om[1] + "&sz=s400";
+    }
+    return u;
+  }
+
+  function extractFirstHttpUrl(s) {
+    var m = String(s).match(/https?:\/\/[^\s"'<>\]]+/i);
+    if (!m) return "";
+    return m[0].replace(/[),.;]+$/g, "");
+  }
+
+  /** Master "Photo" cell: plain https URL, or Sheets formulas =IMAGE("url") / =HYPERLINK("url",...). */
+  function photoUrlFromMasterCell(raw) {
+    if (raw == null) return "";
+    var s = String(raw)
+      .trim()
+      .replace(/[\u201c\u201d\u2018\u2019]/g, '"');
+    if (!s) return "";
+    var m = s.match(/^=IMAGE\s*\(\s*"([^"]+)"/i);
+    if (m) return normalizePhotoUrlForImg(m[1].trim());
+    m = s.match(/^=IMAGE\s*\(\s*'([^']+)'/i);
+    if (m) return normalizePhotoUrlForImg(m[1].trim());
+    m = s.match(/^=HYPERLINK\s*\(\s*"([^"]+)"/i);
+    if (m) return normalizePhotoUrlForImg(m[1].trim());
+    m = s.match(/^=HYPERLINK\s*\(\s*'([^']+)'/i);
+    if (m) return normalizePhotoUrlForImg(m[1].trim());
+    if (/^https?:\/\//i.test(s)) return normalizePhotoUrlForImg(s);
+    var extracted = extractFirstHttpUrl(s);
+    if (extracted) return normalizePhotoUrlForImg(extracted);
+    return "";
+  }
 
   function emptyRowObject() {
     var o = {};
@@ -117,6 +192,67 @@
 
   function saveMarksheets(list) {
     localStorage.setItem(MARKS_STORAGE_KEY, JSON.stringify(list));
+  }
+
+  function loadMarksPending() {
+    try {
+      var raw = localStorage.getItem(MARKS_PENDING_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveMarksPending(list) {
+    try {
+      localStorage.setItem(MARKS_PENDING_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    } catch (_e) {}
+  }
+
+  function loadObjectCache(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      var obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function saveObjectCache(key, obj) {
+    try {
+      localStorage.setItem(key, JSON.stringify(obj && typeof obj === "object" ? obj : {}));
+    } catch (_e) {}
+  }
+
+  function upsertMarksPending(record, action) {
+    if (!record || record.id == null) return;
+    var q = loadMarksPending();
+    var id = String(record.id);
+    var next = [];
+    var replaced = false;
+    for (var i = 0; i < q.length; i++) {
+      var it = q[i] || {};
+      if (String(it.id) === id) {
+        next.push({ id: id, action: action, record: record });
+        replaced = true;
+      } else {
+        next.push(it);
+      }
+    }
+    if (!replaced) next.push({ id: id, action: action, record: record });
+    saveMarksPending(next);
+  }
+
+  function removeMarksPendingById(id) {
+    var q = loadMarksPending();
+    var sid = String(id);
+    q = q.filter(function (it) {
+      return String((it || {}).id) !== sid;
+    });
+    saveMarksPending(q);
   }
 
   function nextId(list) {
@@ -312,6 +448,24 @@
     return datePart + " at " + h12 + ":" + pad2(mi) + " " + ampm;
   }
 
+  /**
+   * YYYY-MM-DD for &lt;input type="date"&gt; from sheet/API (ISO, datetime string, or Date).
+   * Same logic as teacher TeacherMarks.html examDateToInputValue.
+   */
+  function marksExamDateToInputValue(v) {
+    if (v == null || v === "") return "";
+    if (typeof v === "string") {
+      var t = v.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+    }
+    var d = v instanceof Date ? v : new Date(v);
+    if (isNaN(d.getTime())) return "";
+    var y = d.getFullYear();
+    var mo = d.getMonth() + 1;
+    var day = d.getDate();
+    return y + "-" + (mo < 10 ? "0" : "") + mo + "-" + (day < 10 ? "0" : "") + day;
+  }
+
   function applyKvBranding() {
     var school = String(typeof window.KV_SCHOOL_NAME !== "undefined" && window.KV_SCHOOL_NAME != null ? window.KV_SCHOOL_NAME : "").trim();
     var klass = String(typeof window.KV_SCHOOL_CLASS !== "undefined" && window.KV_SCHOOL_CLASS != null ? window.KV_SCHOOL_CLASS : "").trim();
@@ -328,19 +482,28 @@
     if (top) {
       top.textContent = klass && klass !== "—" ? school + " · " + klass : school;
     }
-    document.title = school + " — Student dashboard";
+    document.title = "Vaayu";
     var modalSchool = document.getElementById("modalSchoolName");
     if (modalSchool) modalSchool.textContent = school;
   }
 
+  function marksValidHint(maxMarks) {
+    var m = parseFloat(String(maxMarks).replace(/,/g, "."));
+    if (!isNaN(m) && m > 0) {
+      return "Enter valid marks less than or equal to " + m + " or AB.";
+    }
+    return "Enter valid marks or AB.";
+  }
+
   function normalizeMarksInput(raw, maxMarks) {
     var s = String(raw).trim();
-    if (!s) return { error: "Enter marks or AB for every student." };
+    var hint = marksValidHint(maxMarks);
+    if (!s) return { error: "EMPTY", emptyMsg: "Enter a mark or AB for each student." };
     if (/^a(b)?$/i.test(s)) return { ok: true, isAb: true, display: "AB" };
     var n = parseFloat(s.replace(/,/g, "."));
-    if (isNaN(n)) return { error: "Invalid marks — use a number or AB." };
-    if (n < 0) return { error: "Marks cannot be negative." };
-    if (n > maxMarks) return { error: "Marks cannot exceed maximum marks (" + maxMarks + ")." };
+    if (isNaN(n)) return { error: hint };
+    if (n < 0) return { error: hint };
+    if (n > maxMarks) return { error: hint };
     return { ok: true, isAb: false, num: n, display: s };
   }
 
@@ -367,15 +530,16 @@
     if (maxMarks == null || isNaN(maxMarks) || maxMarks <= 0) {
       return { level: "nomax", message: "Set maximum marks first." };
     }
+    var hint = marksValidHint(maxMarks);
     var s = String(raw).trim();
     if (!s) return { level: "empty" };
     if (/^a(b)?$/i.test(s)) return { level: "ok" };
-    if (/[a-z]/i.test(s)) return { level: "bad", message: "Use digits or AB only." };
-    if (!/^\d*\.?\d*$/.test(s)) return { level: "bad", message: "Invalid marks." };
+    if (/[a-z]/i.test(s)) return { level: "bad", message: hint };
+    if (!/^\d*\.?\d*$/.test(s)) return { level: "bad", message: hint };
     var n = parseFloat(s.replace(/,/g, "."));
-    if (isNaN(n)) return { level: "partial" };
-    if (n < 0) return { level: "bad", message: "Cannot be negative." };
-    if (n > maxMarks) return { level: "bad", message: "Cannot exceed " + maxMarks + "." };
+    if (isNaN(n)) return { level: "partial", message: hint };
+    if (n < 0) return { level: "bad", message: hint };
+    if (n > maxMarks) return { level: "bad", message: hint };
     return { level: "ok" };
   }
 
@@ -397,6 +561,36 @@
       inp.classList.add("marks-invalid");
       if (errSpan) errSpan.textContent = v.message;
     }
+  }
+
+  function showMarksValidationMessage(message) {
+    var m = formatShortUserMessage(String(message || "").trim() || "Invalid value.", 200);
+    if (typeof window.KV_showOkDialog === "function") {
+      window.KV_showOkDialog(m);
+    } else {
+      alert(m);
+    }
+  }
+
+  /** On blur: normalize AB, then clear invalid / incomplete values and show a message. */
+  function finalizeMarksCellOnBlur(inp) {
+    normalizeAbsentOnBlur(inp);
+    var maxN = getMarksMaxNumber();
+    var v = validateMarksRealtime(inp.value, maxN);
+    var s = String(inp.value).trim();
+    if (s === "") {
+      applyMarksCellValidation(inp);
+      return;
+    }
+    if (v.level === "ok") {
+      applyMarksCellValidation(inp);
+      return;
+    }
+    var msg =
+      v.message || (v.level === "partial" ? "Enter a number or AB." : "Use a number or AB.");
+    inp.value = "";
+    applyMarksCellValidation(inp);
+    showMarksValidationMessage(msg);
   }
 
   function revalidateAllMarksInputs() {
@@ -424,6 +618,7 @@
     var v = validateMarksRealtime(inp.value, maxN);
     if (v.level === "bad") return true;
     if (v.level === "nomax" && String(inp.value).trim()) return true;
+    if (v.level === "partial" && String(inp.value).trim()) return true;
     return false;
   }
 
@@ -431,7 +626,8 @@
     var maxN = getMarksMaxNumber();
     var v = validateMarksRealtime(inp.value, maxN);
     if (v.message) return v.message;
-    return "Fix this cell before moving to the next.";
+    if (v.level === "partial") return "Enter a number or AB.";
+    return "Fix this cell first.";
   }
 
   /** Roll number (R.NO.) stored as marks entry studentId and in Sheets column StudentId. */
@@ -445,69 +641,70 @@
     return r || "__nir_" + String(st.id);
   }
 
-  function findMarksInputForStudent(st) {
-    var key = marksStudentDomKey(st);
-    var inputs = document.querySelectorAll("#marksStudentTbody input.marks-cell-input");
-    for (var i = 0; i < inputs.length; i++) {
-      if (inputs[i].getAttribute("data-student-id") === key) return inputs[i];
-    }
-    return null;
-  }
-
   /** Validates form + marks; returns { meta, rows, record } or null. */
   function tryBuildMarksSlipRecord() {
     var maxStr = document.getElementById("marksMax").value.trim();
     var maxMarks = parseFloat(maxStr.replace(/,/g, "."));
     if (!maxStr || isNaN(maxMarks) || maxMarks <= 0) {
-      alert("Please enter valid maximum marks (a positive number).");
+      showMarksValidationMessage("Enter valid maximum marks.");
       return null;
     }
     revalidateAllMarksInputs();
     if (document.querySelector("#marksStudentTbody input.marks-cell-input.marks-invalid")) {
-      alert("Fix the marks shown in red before continuing.");
+      showMarksValidationMessage("Fix red cells first.");
       return null;
     }
     var teacher = document.getElementById("marksTeacher").value.trim();
     if (!teacher) {
-      alert("Please enter the subject teacher's name.");
+      showMarksValidationMessage("Enter teacher name.");
       return null;
     }
     var examDate = document.getElementById("marksExamDate").value;
     if (!examDate) {
-      alert("Please select the date of examination.");
+      showMarksValidationMessage("Select exam date.");
       return null;
     }
     var subject = document.getElementById("marksSubject").value;
     var examName = document.getElementById("marksExam").value;
     if (!subject || !examName) {
-      alert("Please select subject and examination.");
+      showMarksValidationMessage("Select examination and subject.");
       return null;
     }
     var list = studentsForMarksEntry(students);
     if (!list.length) {
-      alert("No students in the database.");
+      showMarksValidationMessage("No students to mark.");
       return null;
+    }
+    var markNodes = document.querySelectorAll("#marksStudentTbody input.marks-cell-input");
+    var inpByKey = {};
+    for (var ki = 0; ki < markNodes.length; ki++) {
+      var kAttr = markNodes[ki].getAttribute("data-student-id");
+      if (kAttr) inpByKey[kAttr] = markNodes[ki];
     }
     var rows = [];
     var entries = [];
     for (var mi = 0; mi < list.length; mi++) {
       var st = list[mi];
-      var inp = findMarksInputForStudent(st);
+      var want = marksStudentDomKey(st);
+      var inp = inpByKey[want];
       if (!inp) {
-        alert("Could not read marks for all students. Refresh the page.");
+        showMarksValidationMessage("Could not read marks for all students.");
         return null;
       }
+      var stName = String(st["Student Name"] || "").trim() || "—";
       normalizeAbsentOnBlur(inp);
       var v = normalizeMarksInput(inp.value, maxMarks);
       if (v.error) {
-        alert(
-          v.error + " (student: " + (String(st["Student Name"] || "").trim() || "—") + ")."
-        );
+        if (v.error === "EMPTY") {
+          showMarksValidationMessage(v.emptyMsg);
+        } else {
+          showMarksValidationMessage(v.error);
+        }
         return null;
       }
       var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
       var rollId = marksStudentPersistId(st);
-      var nm = String(st["Student Name"] || "").trim() || "—";
+      var nm = stName;
       var pctDisplay = v.isAb ? "—" : ((v.num / maxMarks) * 100).toFixed(2) + "%";
       rows.push({
         roll: roll,
@@ -579,6 +776,8 @@
   var _marksSlipsSyncPromise = null;
   /** When true, full entry form is shown for edit/new regardless of resolved slip. */
   var _marksPickerEditing = false;
+  /** Suppress exam/subject change handlers while applying a slip (avoids clearing date / edit state). */
+  var _marksSelectProgrammatic = false;
 
   function syncMarkSlipsListFromSheets(opts) {
     if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
@@ -600,8 +799,7 @@
   }
 
   var _studentsSyncPromise = null;
-  var MASTER_SHEETS_POLL_MS = 2 * 60 * 1000;
-  var _masterVisibilityTimer = null;
+  var _onlineSyncDebounceTimer = null;
 
   function normalizeStudentsFromSheetApi(list) {
     if (!Array.isArray(list)) return [];
@@ -647,30 +845,171 @@
     return _studentsSyncPromise;
   }
 
-  function onMasterVisibilityResume() {
-    if (document.visibilityState !== "visible") return;
-    if (_masterVisibilityTimer) clearTimeout(_masterVisibilityTimer);
-    _masterVisibilityTimer = setTimeout(function () {
-      _masterVisibilityTimer = null;
-      Promise.all([
-        syncStudentsFromSheets({ silent: true }),
-        syncMarkSlipsListFromSheets({ silent: true }),
-      ]).finally(function () {
-        refreshUI();
+  /** Subject teachers may write only when true (Script property KV_MARKS_ENTRY_ENABLED). */
+  var _marksEntryEnabled = true;
+  var _marksEntryToggleProgrammatic = false;
+  /** True while setMarksEntryPolicy request is in flight — avoid stale policy overwriting the toggle. */
+  var _marksEntryPolicySaveInFlight = false;
+
+  function refreshMarksEntryPolicyFromServer(opts) {
+    opts = opts || {};
+    var silent = !!opts.silent;
+    if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+      return Promise.resolve();
+    }
+    return KVSheets.sheetsCall("getMarksEntryPolicy", {})
+      .then(function (data) {
+        if (_marksEntryPolicySaveInFlight) return;
+        _marksEntryEnabled = data.marksEntryEnabled !== false;
+      })
+      .catch(function (e) {
+        if (silent) console.warn("Marks entry policy:", e && e.message ? e.message : e);
+        else alert(e.message || String(e));
+      });
+  }
+
+  function syncMarksEntryToggleFromCache() {
+    if (_marksEntryPolicySaveInFlight) return;
+    var el = document.getElementById("marksEntryToggle");
+    if (!el) return;
+    _marksEntryToggleProgrammatic = true;
+    el.checked = !!_marksEntryEnabled;
+    _marksEntryToggleProgrammatic = false;
+  }
+
+  function updateMarksEntryToggleRowState() {
+    var row = document.getElementById("marksEntryToggleRow");
+    var tgl = document.getElementById("marksEntryToggle");
+    if (!tgl) return;
+    var has = !!(window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl());
+    tgl.disabled = !has;
+    if (row) row.classList.toggle("marks-entry-policy-row--disabled", !has);
+  }
+
+  var _currentAppNavId = "home";
+  var _foregroundPollTimer = null;
+  var _foregroundPullInFlight = false;
+  var _foregroundVisibilityBound = false;
+
+  function retryPendingMarksInBackground() {
+    if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+      return Promise.resolve(false);
+    }
+    var q = loadMarksPending();
+    if (!q.length) return Promise.resolve(false);
+    var i = 0;
+    function next() {
+      if (i >= q.length) return Promise.resolve(true);
+      var item = q[i++] || {};
+      if (!item.record || !item.action) return next();
+      return KVSheets.sheetsCall(item.action, { record: item.record })
+        .then(function () {
+          removeMarksPendingById(item.id);
+        })
+        .catch(function () {})
+        .then(next);
+    }
+    return next();
+  }
+
+  function getForegroundPollIntervalMs() {
+    try {
+      var raw = window.KV_SHEETS_FOREGROUND_POLL_MS;
+      if (raw === false || raw === -1) return 0;
+      if (typeof raw === "string" && raw.toLowerCase() === "off") return 0;
+      if (raw == null || raw === "") return 45000;
+      var n = parseInt(String(raw), 10);
+      if (isNaN(n) || n === 0) return 45000;
+      if (n < 15000) return 15000;
+      if (n > 600000) return 600000;
+      return n;
+    } catch (e) {
+      return 45000;
+    }
+  }
+
+  function shouldForegroundPollSheets() {
+    if (document.visibilityState !== "visible") return false;
+    if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+      return false;
+    }
+    if (_currentAppNavId === "setup") return false;
+    return true;
+  }
+
+  function tickForegroundSheetPoll() {
+    if (!shouldForegroundPollSheets()) return;
+    if (_foregroundPullInFlight) return;
+    _foregroundPullInFlight = true;
+    pullSheetsIntoApp({ silent: true }).finally(function () {
+      _foregroundPullInFlight = false;
+    });
+  }
+
+  /** Periodic pull while the app is on-screen (not Setup) so other people’s sheet edits appear. */
+  function startForegroundSheetPolling() {
+    if (_foregroundPollTimer) clearInterval(_foregroundPollTimer);
+    _foregroundPollTimer = null;
+    var ms = getForegroundPollIntervalMs();
+    if (ms <= 0) return;
+    _foregroundPollTimer = setInterval(tickForegroundSheetPoll, ms);
+    if (!_foregroundVisibilityBound) {
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") {
+          tickForegroundSheetPoll();
+        }
+      });
+      _foregroundVisibilityBound = true;
+    }
+  }
+
+  /**
+   * Pull Master + Marks slip index from Google Sheets into local state.
+   * Use on app open, Sync button, when the browser goes online again, and foreground polling.
+   */
+  function pullSheetsIntoApp(opts) {
+    opts = opts || {};
+    var silent = !!opts.silent;
+    return Promise.all([
+      retryPendingMarksInBackground(),
+      syncStudentsFromSheets({ silent: silent }),
+      syncMarkSlipsListFromSheets({ silent: silent }),
+      refreshMarksEntryPolicyFromServer({ silent: silent }),
+    ]).finally(function () {
+      refreshUI();
+      syncMarksEntryToggleFromCache();
+      updateMarksEntryToggleRowState();
+      if (!marksHasUnsavedMarksDraft()) {
         rebuildMarksExamSelectOptions();
         var mex = document.getElementById("marksExam");
         rebuildMarksSubjectSelectForExam(mex ? mex.value : "");
-      });
-    }, 600);
+        updateMarksPickerUI();
+      }
+      try {
+        if (typeof window.__kvRunAttendanceBackgroundSync === "function") {
+          window.__kvRunAttendanceBackgroundSync({ refreshToday: true, preloadBacklog: true });
+        }
+        if (typeof window.__kvPrimeAttendanceTodayDraft === "function") {
+          window.__kvPrimeAttendanceTodayDraft();
+        }
+        if (typeof window.__kvPrefetchTimetables === "function") {
+          window.__kvPrefetchTimetables();
+        }
+      } catch (_e) {}
+    });
   }
 
-  function startMasterAutoSyncTimers() {
-    setInterval(function () {
-      syncStudentsFromSheets({ silent: true }).finally(function () {
-        refreshUI();
-      });
-    }, MASTER_SHEETS_POLL_MS);
-    document.addEventListener("visibilitychange", onMasterVisibilityResume);
+  function wireSheetsReconnectSync() {
+    window.addEventListener("online", function () {
+      if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+        return;
+      }
+      if (_onlineSyncDebounceTimer) clearTimeout(_onlineSyncDebounceTimer);
+      _onlineSyncDebounceTimer = setTimeout(function () {
+        _onlineSyncDebounceTimer = null;
+        pullSheetsIntoApp({ silent: true });
+      }, 400);
+    });
   }
 
   function collectMarksExamKeys() {
@@ -785,6 +1124,13 @@
     return list[0];
   }
 
+  function savedAtToMillis(v) {
+    var s = String(v || "").trim();
+    if (!s) return NaN;
+    var n = Date.parse(s);
+    return isNaN(n) ? NaN : n;
+  }
+
   function findLatestSheetSummaryForExamSubject(exam, subject) {
     var list = _cachedSheetsSlips.filter(function (s) {
       return slipMatchesExamSubjectSummary(exam, subject, s);
@@ -799,7 +1145,18 @@
     if (!loc && !sh) return { available: false };
     var locT = loc ? String(loc.savedAt || "") : "";
     var shT = sh ? String(sh.savedAt || "") : "";
-    if (loc && (!sh || locT >= shT)) {
+    var locMs = savedAtToMillis(locT);
+    var shMs = savedAtToMillis(shT);
+    var preferLocal = false;
+    if (loc && !sh) preferLocal = true;
+    else if (loc && sh) {
+      if (!isNaN(locMs) || !isNaN(shMs)) {
+        preferLocal = (isNaN(shMs) && !isNaN(locMs)) || (!isNaN(locMs) && !isNaN(shMs) && locMs >= shMs);
+      } else {
+        preferLocal = locT >= shT;
+      }
+    }
+    if (loc && preferLocal) {
       return { available: true, source: "local", record: loc };
     }
     if (sh) {
@@ -831,14 +1188,63 @@
     };
   }
 
-  function clearMarksEntryFormExceptExamSubject() {
+  function getCachedSheetSlipDetail(slipId) {
+    var k = String(slipId || "").trim();
+    if (!k) return null;
+    var c = loadObjectCache(SHEET_SLIP_DETAIL_CACHE_KEY);
+    return c[k] || null;
+  }
+
+  function setCachedSheetSlipDetail(slipId, data) {
+    var k = String(slipId || "").trim();
+    if (!k || !data) return;
+    var c = loadObjectCache(SHEET_SLIP_DETAIL_CACHE_KEY);
+    c[k] = {
+      meta: data.meta || {},
+      entries: Array.isArray(data.entries) ? data.entries : [],
+      savedAt: new Date().toISOString(),
+    };
+    saveObjectCache(SHEET_SLIP_DETAIL_CACHE_KEY, c);
+  }
+
+  /** Clears max / teacher / date only (same idea as teacher tmClearEntryMetaFields). */
+  function marksClearEntryMetaFields() {
     var mx = document.getElementById("marksMax");
     var te = document.getElementById("marksTeacher");
     var dt = document.getElementById("marksExamDate");
     if (mx) mx.value = "";
     if (te) te.value = "";
     if (dt) dt.value = "";
-    editingMarksSlipId = null;
+  }
+
+  /** Skip resetting the marks form while there is an in-progress draft (teacher tmHasUnsavedMarksDraft parity). */
+  function marksHasUnsavedMarksDraft() {
+    if (_marksPickerEditing) return true;
+    var entry = document.getElementById("marksNewEntrySection");
+    if (!entry || entry.hidden) return false;
+    var ae = document.activeElement;
+    if (ae && (ae.id === "marksMax" || ae.id === "marksTeacher" || ae.id === "marksExamDate")) return true;
+    if (ae && ae.classList && ae.classList.contains("marks-cell-input")) return true;
+    var mx = document.getElementById("marksMax");
+    var te = document.getElementById("marksTeacher");
+    var dt = document.getElementById("marksExamDate");
+    if (mx && String(mx.value || "").trim()) return true;
+    if (te && String(te.value || "").trim()) return true;
+    if (dt && String(dt.value || "").trim()) return true;
+    var nodes = document.querySelectorAll("#marksStudentTbody input.marks-cell-input");
+    for (var i = 0; i < nodes.length; i++) {
+      if (String(nodes[i].value || "").trim()) return true;
+    }
+    return false;
+  }
+
+  /** Top + footer cancel (same as teacher marks UI). */
+  function setMarksCancelEditingVisible(visible) {
+    var ids = ["btnMarksCancelEdit", "btnMarksCancelEditFooter"];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el) el.hidden = !visible;
+    }
   }
 
   function buildMarksExistingSummaryLine(res) {
@@ -912,7 +1318,21 @@
     var entryEl = document.getElementById("marksNewEntrySection");
     var exEl = document.getElementById("marksExam");
     var subEl = document.getElementById("marksSubject");
+    var bannerEl = document.getElementById("marksEntryLockBanner");
+    var btnEdit = document.getElementById("btnMarksEditSelected");
+    var btnDl = document.getElementById("btnMarksDownloadSelected");
     if (!exEl || !subEl) return;
+
+    if (bannerEl) {
+      if (!_marksEntryEnabled) {
+        bannerEl.hidden = false;
+        bannerEl.textContent = MARKS_ENTRY_DISABLED_MSG;
+      } else {
+        bannerEl.hidden = true;
+        bannerEl.textContent = "";
+      }
+    }
+
     var ex = exEl.value.trim();
     var sub = subEl.value.trim();
     if (!ex || !sub) {
@@ -921,30 +1341,75 @@
       if (statusEl) statusEl.textContent = "";
       if (entryEl) entryEl.hidden = true;
       _resolvedMarksSlip = null;
+      if (btnEdit) btnEdit.hidden = false;
+      if (btnDl) btnDl.hidden = false;
       return;
     }
-    if (_marksPickerEditing) {
+
+    if (!_marksEntryEnabled && _marksPickerEditing) {
+      _marksPickerEditing = false;
+      editingMarksSlipId = null;
+      if (typeof window !== "undefined") window.__marksEditRecord = null;
+      setMarksCancelEditingVisible(false);
+      marksClearEntryMetaFields();
+    }
+
+    if (_marksPickerEditing && _marksEntryEnabled) {
       if (quickEl) quickEl.hidden = true;
       if (dynamicArea) dynamicArea.hidden = false;
       if (entryEl) entryEl.hidden = false;
-      if (statusEl) statusEl.textContent = "Editing marks — Submit to save, or Cancel.";
+      if (statusEl) statusEl.textContent = "Editing — Submit to save, or Cancel.";
+      if (btnEdit) btnEdit.hidden = false;
+      if (btnDl) btnDl.hidden = false;
       return;
     }
+
     var res = resolveSlipForExamSubject(ex, sub);
     _resolvedMarksSlip = res;
+
+    if (!_marksEntryEnabled) {
+      if (res.available) {
+        if (quickEl) quickEl.hidden = false;
+        if (dynamicArea) dynamicArea.hidden = true;
+        if (entryEl) entryEl.hidden = true;
+        if (summaryEl) summaryEl.textContent = buildMarksExistingSummaryLine(res);
+        if (statusEl) statusEl.textContent = "";
+        if (btnEdit) btnEdit.hidden = true;
+        if (btnDl) btnDl.hidden = false;
+      } else {
+        if (quickEl) quickEl.hidden = true;
+        if (dynamicArea) dynamicArea.hidden = true;
+        if (entryEl) entryEl.hidden = true;
+        if (statusEl) statusEl.textContent = MARKS_ENTRY_DISABLED_MSG;
+        if (btnEdit) btnEdit.hidden = true;
+        if (btnDl) btnDl.hidden = true;
+      }
+      return;
+    }
+
+    if (btnEdit) btnEdit.hidden = false;
+    if (btnDl) btnDl.hidden = false;
+
     if (res.available) {
       if (quickEl) quickEl.hidden = false;
       if (dynamicArea) dynamicArea.hidden = true;
       if (entryEl) entryEl.hidden = true;
       if (summaryEl) summaryEl.textContent = buildMarksExistingSummaryLine(res);
+      if (statusEl) statusEl.textContent = "";
+      setMarksCancelEditingVisible(false);
     } else {
       if (quickEl) quickEl.hidden = true;
       if (dynamicArea) dynamicArea.hidden = false;
       if (entryEl) entryEl.hidden = false;
       if (statusEl)
         statusEl.textContent = "No marks on file yet — enter details below and Submit.";
-      clearMarksEntryFormExceptExamSubject();
-      renderMarksStudentTable();
+      if (!marksHasUnsavedMarksDraft()) {
+        if (typeof window !== "undefined") window.__marksEditRecord = null;
+        marksClearEntryMetaFields();
+        editingMarksSlipId = null;
+        setMarksCancelEditingVisible(false);
+        renderMarksStudentTable();
+      }
     }
   }
 
@@ -986,40 +1451,36 @@
 
   function applySlipToMarksForm(record) {
     if (!record) return;
+    if (!_marksEntryEnabled) {
+      showMarksValidationMessage(MARKS_ENTRY_DISABLED_MSG);
+      return;
+    }
     document.getElementById("marksMax").value = String(record.maxMarks != null ? record.maxMarks : "");
     document.getElementById("marksTeacher").value = String(record.teacherName || "");
-    var ed = String(record.examDate || "");
-    document.getElementById("marksExamDate").value = ed.length >= 10 ? ed.slice(0, 10) : ed;
-    setMarksSelectOrAdd("marksExam", record.examName || "");
-    rebuildMarksSubjectSelectForExam(record.examName || "");
-    setMarksSelectOrAdd("marksSubject", record.subject || "");
-    editingMarksSlipId = record.id;
-    var cancelBtn = document.getElementById("btnMarksCancelEdit");
-    if (cancelBtn) cancelBtn.hidden = false;
-    renderMarksStudentTable();
-    var list = studentsForMarksEntry(students);
-    for (var li = 0; li < list.length; li++) {
-      var st = list[li];
-      var inp = findMarksInputForStudent(st);
-      if (!inp) continue;
-      var en = findMarksEntryForStudent(record, st);
-      if (!en) continue;
-      var mk = en.marks;
-      var ms = String(mk != null ? mk : "").trim();
-      if (ms === "" || /^ab$/i.test(ms)) inp.value = /^ab$/i.test(ms) ? "AB" : "";
-      else if (typeof mk === "number" && mk % 1 === 0) inp.value = String(mk);
-      else inp.value = ms;
+    document.getElementById("marksExamDate").value = marksExamDateToInputValue(record.examDate);
+    _marksSelectProgrammatic = true;
+    try {
+      setMarksSelectOrAdd("marksExam", record.examName || "");
+      rebuildMarksSubjectSelectForExam(record.examName || "");
+      setMarksSelectOrAdd("marksSubject", record.subject || "");
+    } finally {
+      _marksSelectProgrammatic = false;
     }
+    editingMarksSlipId = record.id;
+    if (typeof window !== "undefined") window.__marksEditRecord = record;
+    setMarksCancelEditingVisible(true);
+    renderMarksStudentTable();
     revalidateAllMarksInputs();
     _marksPickerEditing = true;
     updateMarksPickerUI();
   }
 
   function clearMarksEditMode() {
-    editingMarksSlipId = null;
     _marksPickerEditing = false;
-    var btn = document.getElementById("btnMarksCancelEdit");
-    if (btn) btn.hidden = true;
+    editingMarksSlipId = null;
+    if (typeof window !== "undefined") window.__marksEditRecord = null;
+    setMarksCancelEditingVisible(false);
+    marksClearEntryMetaFields();
     renderMarksStudentTable();
     updateMarksPickerUI();
   }
@@ -1224,6 +1685,19 @@
   /** When set, Submit replaces this slip id locally and uses replaceMarkSlip in Sheets. */
   var editingMarksSlipId = null;
 
+  function isMarksViewVisible() {
+    var view = document.getElementById("view-marks");
+    return !!(view && !view.hidden);
+  }
+
+  /** True while the marks entry form is open (new slip or edit) — avoid wiping inputs during sync. */
+  function isMarksEntryActive() {
+    if (!isMarksViewVisible()) return false;
+    if (_marksPickerEditing) return true;
+    var entryEl = document.getElementById("marksNewEntrySection");
+    return !!(entryEl && !entryEl.hidden);
+  }
+
   function refreshUI() {
     students = loadStudents();
     fillNameSelects();
@@ -1235,7 +1709,9 @@
     if (rc) rc.textContent = String(students.length);
     var hc = document.getElementById("homeRecordCount");
     if (hc) hc.textContent = String(students.length);
-    renderMarksStudentTable();
+    if (!isMarksEntryActive()) {
+      renderMarksStudentTable();
+    }
   }
 
   function renderMarksStudentTable() {
@@ -1278,12 +1754,25 @@
         '" placeholder="marks or AB" inputmode="decimal" autocomplete="off" /><span class="marks-cell-error" aria-live="polite"></span></div></td>';
       tbody.appendChild(tr);
       var inp = tr.querySelector(".marks-cell-input");
+      var editRec =
+        typeof window !== "undefined" && window.__marksEditRecord && window.__marksEditRecord.entries
+          ? window.__marksEditRecord
+          : null;
+      if (editRec) {
+        var en = findMarksEntryForStudent(editRec, st);
+        if (en) {
+          var mk = en.marks;
+          var ms = String(mk != null ? mk : "").trim();
+          if (ms === "" || /^ab$/i.test(ms)) inp.value = /^ab$/i.test(ms) ? "AB" : "";
+          else if (typeof mk === "number" && mk % 1 === 0) inp.value = String(mk);
+          else inp.value = ms;
+        }
+      }
       inp.addEventListener("input", function () {
         applyMarksCellValidation(this);
       });
       inp.addEventListener("blur", function () {
-        normalizeAbsentOnBlur(this);
-        applyMarksCellValidation(this);
+        finalizeMarksCellOnBlur(this);
       });
     }
     revalidateAllMarksInputs();
@@ -1384,8 +1873,53 @@
     return keys;
   }
 
-  function openModal(title, data) {
+  function fillModalPhotoCell(td, rawCell) {
+    var url = photoUrlFromMasterCell(rawCell);
+    if (!url) {
+      td.textContent = rawCell === "" || rawCell == null ? "—" : String(rawCell);
+      return;
+    }
+    var img = document.createElement("img");
+    img.className = "query-photo-modal-thumb";
+    img.alt = "";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+    img.addEventListener("error", function () {
+      td.textContent = "—";
+    });
+    td.appendChild(img);
+  }
+
+  function openModal(title, data, opts) {
+    opts = opts || {};
     document.getElementById("modalTitle").textContent = title;
+    var subtitleEl = document.getElementById("modalSubtitle");
+    var summaryEl = document.getElementById("modalSummaryGrid");
+    if (subtitleEl) {
+      var subtitle = String(opts.subtitle || "").trim();
+      subtitleEl.textContent = subtitle;
+      subtitleEl.hidden = !subtitle;
+    }
+    if (summaryEl) {
+      summaryEl.innerHTML = "";
+      var pairs = Array.isArray(opts.summaryPairs) ? opts.summaryPairs : [];
+      for (var pi = 0; pi < pairs.length; pi++) {
+        var pair = pairs[pi] || {};
+        var item = document.createElement("div");
+        item.className = "report-summary-item";
+        var label = document.createElement("div");
+        label.className = "report-summary-label";
+        label.textContent = String(pair.label || "");
+        var value = document.createElement("div");
+        value.className = "report-summary-value";
+        value.textContent = String(pair.value == null ? "" : pair.value);
+        item.appendChild(label);
+        item.appendChild(value);
+        summaryEl.appendChild(item);
+      }
+      summaryEl.hidden = !pairs.length;
+    }
     var thead = document.querySelector("#modalTable thead tr");
     var tbody = document.querySelector("#modalTable tbody");
     thead.innerHTML = "";
@@ -1393,9 +1927,12 @@
     if (!data || !data.length) return;
     var padded = window.KVReports ? window.KVReports.padRectangular(data) : data;
     var hdr = padded[0];
+    var isProfileKV =
+      hdr.length === 2 && String(hdr[0]) === "Property" && String(hdr[1]) === "Information";
     for (var h = 0; h < hdr.length; h++) {
       var th = document.createElement("th");
       th.textContent = hdr[h];
+      if (opts.headerBlue) th.style.background = "#003366";
       thead.appendChild(th);
     }
     for (var r = 1; r < padded.length; r++) {
@@ -1403,7 +1940,27 @@
       for (var c = 0; c < padded[r].length; c++) {
         var td = document.createElement("td");
         var cell = padded[r][c];
-        td.textContent = cell === "" ? "—" : String(cell);
+        var prop0 = String(padded[r][0]).trim();
+        var hdrName = String(hdr[c]).trim();
+        var usePhoto =
+          photoUrlFromMasterCell(cell) &&
+          ((isProfileKV && c === 1 && /^photo$/i.test(prop0)) ||
+            (!isProfileKV && /^photo$/i.test(hdrName)));
+        if (usePhoto) fillModalPhotoCell(td, cell);
+        else td.textContent = cell === "" ? "—" : String(cell);
+        if (
+          opts.percentColumns &&
+          opts.percentColumns.indexOf(c) >= 0 &&
+          r >= Number(opts.percentStartRow || 1)
+        ) {
+          var num = parseFloat(String(cell).replace(/%/g, "").trim());
+          if (!isNaN(num)) {
+            if (num >= 75) td.style.color = "#1e6b3a";
+            else if (num >= 60) td.style.color = "#b45309";
+            else td.style.color = "#b91c1c";
+            td.style.fontWeight = "700";
+          }
+        }
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
@@ -1411,6 +1968,11 @@
     document.getElementById("modalBackdrop").hidden = false;
     window._modalData = padded;
     window._modalTitle = title;
+    var modalExcelBtn = document.getElementById("modalExcel");
+    var modalPdfBtn = document.getElementById("modalPdf");
+    var allowExport = opts.exportable !== false;
+    if (modalExcelBtn) modalExcelBtn.hidden = !allowExport;
+    if (modalPdfBtn) modalPdfBtn.hidden = !allowExport;
   }
 
   function closeModal() {
@@ -1459,14 +2021,20 @@
   }
 
   function showAppView(navId) {
+    _currentAppNavId = String(navId || "home");
     document.querySelectorAll(".app-view").forEach(function (el) {
       el.hidden = el.getAttribute("data-view") !== navId;
     });
     document.querySelectorAll(".sidebar-nav .nav-item[data-nav]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-nav") === navId);
     });
+    if (navId === "timetable" && typeof window.__kvTimetableOnShow === "function") {
+      window.__kvTimetableOnShow();
+    }
     if (navId === "marks") {
-      syncMarkSlipsListFromSheets({ silent: true }).finally(function () {
+      refreshMarksEntryPolicyFromServer({ silent: true }).finally(function () {
+        syncMarksEntryToggleFromCache();
+        updateMarksEntryToggleRowState();
         rebuildMarksExamSelectOptions();
         var exEl = document.getElementById("marksExam");
         rebuildMarksSubjectSelectForExam(exEl ? exEl.value : "");
@@ -1488,6 +2056,54 @@
     });
   }
 
+  function wireInstructionsModal() {
+    var modal = document.getElementById("appInstructionsModal");
+    var body = document.getElementById("appInstrBody");
+    var titleEl = document.getElementById("appInstrTitle");
+    var panel = document.getElementById("appInstrPanel");
+    var backdrop = document.getElementById("appInstrBackdrop");
+    var btnClose = document.getElementById("appInstrClose");
+    if (!modal || !body || !titleEl || !panel) return;
+
+    function closeInstr() {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      body.innerHTML = "";
+      panel.classList.remove("app-instr-modal-panel--wide");
+    }
+
+    function openFrom(btn) {
+      var tid = btn.getAttribute("data-instr-template");
+      var tpl = tid ? document.getElementById(tid) : null;
+      if (!tpl) return;
+      titleEl.textContent = btn.getAttribute("data-instr-title") || "Instructions";
+      if (btn.getAttribute("data-instr-wide") === "1") {
+        panel.classList.add("app-instr-modal-panel--wide");
+      } else {
+        panel.classList.remove("app-instr-modal-panel--wide");
+      }
+      body.innerHTML = "";
+      body.appendChild(tpl.content.cloneNode(true));
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+    }
+
+    document.querySelectorAll(".js-instructions-open").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openFrom(btn);
+      });
+    });
+    if (backdrop) {
+      backdrop.addEventListener("click", closeInstr);
+    }
+    if (btnClose) {
+      btnClose.addEventListener("click", closeInstr);
+    }
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !modal.hidden) closeInstr();
+    });
+  }
+
   function wireQuerySubtabs() {
     var tabs = document.querySelectorAll(".query-tab[data-query-tab]");
     if (!tabs.length) return;
@@ -1506,9 +2122,1461 @@
     });
   }
 
+  function wireConsolidatedSheets() {
+    var consolidatedPendingExam = null;
+    var fetchBtn = document.getElementById("btnConsolidatedFetch");
+    var modal = document.getElementById("kvConsolidatedModal");
+    var statusModal = document.getElementById("kvConsolidatedStatusModal");
+    var absentModal = document.getElementById("kvConsolidatedAbsentModal");
+    if (!fetchBtn || !modal) return;
+    var cancelBtn = document.getElementById("consolidatedBtnCancel");
+    var genBtn = document.getElementById("consolidatedBtnGenerate");
+    var bd = document.getElementById("kvConsolidatedBackdrop");
+
+    function closeConsolidatedModal() {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      consolidatedPendingExam = null;
+    }
+
+    fetchBtn.addEventListener("click", function () {
+      var sel = document.getElementById("consolidatedExamSelect");
+      var exam = sel ? String(sel.value || "").trim() : "";
+      if (!exam) return;
+      var list = studentsForMarksEntry(students);
+      if (!list.length) {
+        alert("Add or import students first.");
+        return;
+      }
+      if (!window.KVConsolidated || !window.KVReports || typeof window.KVReports.downloadWorkbookXlsx !== "function") {
+        alert("Consolidated export module not loaded. Refresh the page.");
+        return;
+      }
+      var marksList = loadMarksheets();
+      var hints = window.KVConsolidated.collectMissingHints(marksList, exam);
+      consolidatedPendingExam = exam;
+      var hintBox = document.getElementById("kvConsolidatedHints");
+      var exBox = document.getElementById("consolidatedExaminerFields");
+      hintBox.innerHTML = "";
+      exBox.innerHTML = "";
+      var hi;
+      for (hi = 0; hi < hints.length; hi++) {
+        var h = hints[hi];
+        if (h.type === "examiner" && h.subjectKey) {
+          var wrap = document.createElement("div");
+          wrap.className = "field consolidated-dynamic-field";
+          var span = document.createElement("span");
+          span.textContent = h.text;
+          var inp = document.createElement("input");
+          inp.type = "text";
+          inp.setAttribute("data-examiner-key", h.subjectKey);
+          inp.setAttribute("placeholder", "Leave blank for —");
+          inp.autocomplete = "off";
+          wrap.appendChild(span);
+          wrap.appendChild(inp);
+          exBox.appendChild(wrap);
+        } else {
+          var p = document.createElement("p");
+          p.className = "card-desc small consolidated-hint-line";
+          p.textContent = h.text;
+          hintBox.appendChild(p);
+        }
+      }
+      var lineEl = document.getElementById("kvConsolidatedExamLine");
+      if (lineEl) lineEl.textContent = "Examination: " + exam;
+      document.getElementById("consolidatedInputSession").value = window.KVConsolidated.defaultSessionLabel();
+      document.getElementById("consolidatedInputPtm").value = "";
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+    });
+
+    if (cancelBtn) cancelBtn.addEventListener("click", closeConsolidatedModal);
+    if (bd) bd.addEventListener("click", closeConsolidatedModal);
+    if (genBtn) {
+      genBtn.addEventListener("click", function () {
+        if (!consolidatedPendingExam) return;
+        if (typeof XLSX === "undefined") {
+          alert("Excel library not available.");
+          return;
+        }
+        var exam = consolidatedPendingExam;
+        var sessionEl = document.getElementById("consolidatedInputSession");
+        var ptmEl = document.getElementById("consolidatedInputPtm");
+        var session = sessionEl ? String(sessionEl.value || "").trim() : "";
+        var ptm = ptmEl ? String(ptmEl.value || "").trim() : "";
+        var examinerByKey = {};
+        var inps = document.querySelectorAll("#consolidatedExaminerFields input[data-examiner-key]");
+        var ji;
+        for (ji = 0; ji < inps.length; ji++) {
+          var k = inps[ji].getAttribute("data-examiner-key");
+          if (k) examinerByKey[k] = String(inps[ji].value || "").trim();
+        }
+        var classLine = String(
+          typeof window.KV_SCHOOL_CLASS !== "undefined" && window.KV_SCHOOL_CLASS != null ? window.KV_SCHOOL_CLASS : ""
+        ).trim();
+        if (classLine === "—") classLine = "";
+        var wb;
+        try {
+          wb = window.KVConsolidated.buildWorkbook({
+            exam: exam,
+            students: studentsForMarksEntry(students),
+            marksList: loadMarksheets(),
+            session: session || window.KVConsolidated.defaultSessionLabel(),
+            ptmDate: ptm,
+            schoolName: window.KVReports.getSchoolName(),
+            classLine: classLine,
+            examinerByKey: examinerByKey,
+            answerBookByKey: {},
+          });
+        } catch (err) {
+          alert(err && err.message ? err.message : String(err));
+          return;
+        }
+        var fname = "KV_Consolidated_" + String(exam).replace(/\s+/g, "_") + ".xlsx";
+        window.KVReports.downloadWorkbookXlsx(wb, fname);
+        closeConsolidatedModal();
+        var hintFooter = document.getElementById("consolidatedFetchHint");
+        if (hintFooter) {
+          hintFooter.hidden = false;
+          hintFooter.textContent = "Last generated: " + exam + " — check your downloads folder.";
+        }
+      });
+    }
+
+    function closeConsolidatedStatusModal() {
+      if (!statusModal) return;
+      statusModal.hidden = true;
+      statusModal.setAttribute("aria-hidden", "true");
+    }
+
+    function openConsolidatedStatusModal() {
+      if (!statusModal) return;
+      statusModal.hidden = false;
+      statusModal.setAttribute("aria-hidden", "false");
+    }
+
+    var statusBtn = document.getElementById("btnConsolidatedStatus");
+    var statusBd = document.getElementById("kvConsolidatedStatusBackdrop");
+    var statusClose = document.getElementById("consolidatedStatusBtnClose");
+    var statusTbody = document.getElementById("consolidatedStatusTbody");
+    var statusExamLine = document.getElementById("kvConsolidatedStatusExamLine");
+    var statusRefreshInFlight = false;
+
+    function renderConsolidatedStatusRows(exam, rows) {
+      if (statusExamLine) statusExamLine.textContent = "Examination: " + exam;
+      statusTbody.innerHTML = "";
+      var ri;
+      for (ri = 0; ri < rows.length; ri++) {
+        var row = rows[ri];
+        var tr = document.createElement("tr");
+        var tdSub = document.createElement("td");
+        tdSub.textContent = row.subject;
+        var tdSt = document.createElement("td");
+        tdSt.textContent = row.entered ? "Entered" : "Not entered";
+        if (!row.entered) tdSt.className = "consolidated-status-missing";
+        var tdTe = document.createElement("td");
+        tdTe.textContent = row.teacher || "—";
+        var tdSv = document.createElement("td");
+        var savedDisp = row.savedAt ? formatSubmittedWhenLine(row.savedAt) || row.savedAt : "";
+        tdSv.textContent = savedDisp || "—";
+        var tdId = document.createElement("td");
+        tdId.className = "consolidated-status-slipid";
+        tdId.textContent = row.slipId || "—";
+        tr.appendChild(tdSub);
+        tr.appendChild(tdSt);
+        tr.appendChild(tdTe);
+        tr.appendChild(tdSv);
+        tr.appendChild(tdId);
+        statusTbody.appendChild(tr);
+      }
+      openConsolidatedStatusModal();
+    }
+
+    if (
+      statusBtn &&
+      statusModal &&
+      statusTbody &&
+      window.KVSheets &&
+      typeof window.KVSheets.sheetsCall === "function" &&
+      window.KVConsolidated &&
+      typeof window.KVConsolidated.buildMarksEntryStatusRows === "function"
+    ) {
+      statusBtn.addEventListener("click", function () {
+        var sel = document.getElementById("consolidatedExamSelect");
+        var exam = sel ? String(sel.value || "").trim() : "";
+        if (!exam) return;
+        if (!window.KVSheets || typeof window.KVSheets.getSheetsUrl !== "function" || !window.KVSheets.getSheetsUrl()) {
+          alert("Configure the Google Apps Script web app URL in settings first.");
+          return;
+        }
+        var c = loadObjectCache(CONS_STATUS_CACHE_KEY);
+        var cachedRows = c[exam] && Array.isArray(c[exam].rows) ? c[exam].rows : null;
+        if (cachedRows && cachedRows.length) renderConsolidatedStatusRows(exam, cachedRows);
+        if (statusRefreshInFlight) return;
+        statusRefreshInFlight = true;
+        var prevLabel = statusBtn.textContent;
+        statusBtn.disabled = true;
+        statusBtn.textContent = cachedRows ? "Refreshing…" : "Loading…";
+        window.KVSheets
+          .sheetsCall("listMarkSlips", {})
+          .then(function (res) {
+            var slips = res && res.slips ? res.slips : [];
+            var rows = window.KVConsolidated.buildMarksEntryStatusRows(exam, slips);
+            var next = loadObjectCache(CONS_STATUS_CACHE_KEY);
+            next[exam] = { rows: rows, savedAt: new Date().toISOString() };
+            saveObjectCache(CONS_STATUS_CACHE_KEY, next);
+            renderConsolidatedStatusRows(exam, rows);
+          })
+          .catch(function (err) {
+            if (!(cachedRows && cachedRows.length)) {
+              alert(formatShortUserMessage(err && err.message ? err.message : err));
+            }
+          })
+          .finally(function () {
+            statusRefreshInFlight = false;
+            statusBtn.disabled = false;
+            statusBtn.textContent = prevLabel;
+          });
+      });
+    }
+    if (statusClose) statusClose.addEventListener("click", closeConsolidatedStatusModal);
+    if (statusBd) statusBd.addEventListener("click", closeConsolidatedStatusModal);
+
+    function closeConsolidatedAbsentModal() {
+      if (!absentModal) return;
+      absentModal.hidden = true;
+      absentModal.setAttribute("aria-hidden", "true");
+    }
+
+    function openConsolidatedAbsentModal() {
+      if (!absentModal) return;
+      absentModal.hidden = false;
+      absentModal.setAttribute("aria-hidden", "false");
+    }
+
+    var absentBtn = document.getElementById("btnConsolidatedAbsent");
+    var absentBd = document.getElementById("kvConsolidatedAbsentBackdrop");
+    var absentClose = document.getElementById("consolidatedAbsentBtnClose");
+    var absentBody = document.getElementById("consolidatedAbsentBody");
+    var absentExamLine = document.getElementById("kvConsolidatedAbsentExamLine");
+    var absentRefreshInFlight = false;
+
+    function renderConsolidatedAbsentBlocks(exam, parts) {
+      if (absentExamLine) absentExamLine.textContent = "Examination: " + exam;
+      absentBody.innerHTML = "";
+      var pi;
+      for (pi = 0; pi < parts.length; pi++) {
+        var pack = parts[pi];
+        var sr = pack.statusRow;
+        var block = document.createElement("div");
+        block.className = "consolidated-absent-block";
+        var h = document.createElement("h3");
+        h.className = "consolidated-absent-subject";
+        h.textContent = sr.subject;
+        block.appendChild(h);
+        if (pack.entries == null) {
+          var pMiss = document.createElement("p");
+          pMiss.className = "card-desc small consolidated-absent-note";
+          pMiss.textContent = "Marks not entered for this subject.";
+          block.appendChild(pMiss);
+        } else {
+          var absList = window.KVConsolidated.absentStudentsFromSheetEntries(pack.entries);
+          if (!absList.length) {
+            var pNone = document.createElement("p");
+            pNone.className = "card-desc small consolidated-absent-note";
+            pNone.textContent = "No absent students (no AB marks on this slip).";
+            block.appendChild(pNone);
+          } else {
+            var ul = document.createElement("ul");
+            ul.className = "consolidated-absent-list";
+            var ai;
+            for (ai = 0; ai < absList.length; ai++) {
+              var a = absList[ai];
+              var li = document.createElement("li");
+              li.textContent = a.rollNo + " — " + a.studentName;
+              ul.appendChild(li);
+            }
+            block.appendChild(ul);
+          }
+        }
+        absentBody.appendChild(block);
+      }
+      openConsolidatedAbsentModal();
+    }
+
+    if (
+      absentBtn &&
+      absentModal &&
+      absentBody &&
+      window.KVSheets &&
+      typeof window.KVSheets.sheetsCall === "function" &&
+      window.KVConsolidated &&
+      typeof window.KVConsolidated.buildMarksEntryStatusRows === "function" &&
+      typeof window.KVConsolidated.absentStudentsFromSheetEntries === "function"
+    ) {
+      absentBtn.addEventListener("click", function () {
+        var sel = document.getElementById("consolidatedExamSelect");
+        var exam = sel ? String(sel.value || "").trim() : "";
+        if (!exam) return;
+        if (!window.KVSheets || typeof window.KVSheets.getSheetsUrl !== "function" || !window.KVSheets.getSheetsUrl()) {
+          alert("Configure the Google Apps Script web app URL in settings first.");
+          return;
+        }
+        var c = loadObjectCache(CONS_ABSENT_CACHE_KEY);
+        var cachedParts = c[exam] && Array.isArray(c[exam].parts) ? c[exam].parts : null;
+        if (cachedParts && cachedParts.length) renderConsolidatedAbsentBlocks(exam, cachedParts);
+        if (absentRefreshInFlight) return;
+        absentRefreshInFlight = true;
+        var prevAbsent = absentBtn.textContent;
+        absentBtn.disabled = true;
+        absentBtn.textContent = cachedParts ? "Refreshing…" : "Loading…";
+        window.KVSheets
+          .sheetsCall("listMarkSlips", {})
+          .then(function (res) {
+            var slips = res && res.slips ? res.slips : [];
+            var statusRows = window.KVConsolidated.buildMarksEntryStatusRows(exam, slips);
+            return Promise.all(
+              statusRows.map(function (r) {
+                if (!r.entered || !r.slipId) {
+                  return Promise.resolve({ statusRow: r, entries: null });
+                }
+                return window.KVSheets
+                  .sheetsCall("getMarkSlip", { slipId: r.slipId })
+                  .then(function (detail) {
+                    return {
+                      statusRow: r,
+                      entries: detail && detail.entries ? detail.entries : null,
+                    };
+                  })
+                  .catch(function () {
+                    return { statusRow: r, entries: null };
+                  });
+              })
+            );
+          })
+          .then(function (parts) {
+            var next = loadObjectCache(CONS_ABSENT_CACHE_KEY);
+            next[exam] = { parts: parts, savedAt: new Date().toISOString() };
+            saveObjectCache(CONS_ABSENT_CACHE_KEY, next);
+            renderConsolidatedAbsentBlocks(exam, parts);
+          })
+          .catch(function (err) {
+            if (!(cachedParts && cachedParts.length)) {
+              alert(formatShortUserMessage(err && err.message ? err.message : err));
+            }
+          })
+          .finally(function () {
+            absentRefreshInFlight = false;
+            absentBtn.disabled = false;
+            absentBtn.textContent = prevAbsent;
+          });
+      });
+    }
+    if (absentClose) absentClose.addEventListener("click", closeConsolidatedAbsentModal);
+    if (absentBd) absentBd.addEventListener("click", closeConsolidatedAbsentModal);
+
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Escape") return;
+      if (absentModal && !absentModal.hidden) {
+        closeConsolidatedAbsentModal();
+        return;
+      }
+      if (statusModal && !statusModal.hidden) {
+        closeConsolidatedStatusModal();
+        return;
+      }
+      if (modal && !modal.hidden) closeConsolidatedModal();
+    });
+  }
+
+  function wireAttendanceModule() {
+    var markBtn = document.getElementById("btnAttendanceMarkToday");
+    var absBtn = document.getElementById("btnAttendanceAbsentees");
+    var sumBtn = document.getElementById("btnAttendanceSummary");
+    var monthlyBtn = document.getElementById("btnAttendanceMonthlyReport");
+    var submitBtn = document.getElementById("btnAttendanceSubmit");
+    var panel = document.getElementById("attendanceMarkPanel");
+    var tbody = document.getElementById("attendanceStudentTbody");
+    var statusLine = document.getElementById("attendanceStatusLine");
+    var backlogDialog = document.getElementById("attendanceBacklogDialog");
+    var backlogMsg = document.getElementById("attendanceBacklogMsg");
+    var backlogHolidayBtn = document.getElementById("attendanceBacklogHoliday");
+    var backlogFillBtn = document.getElementById("attendanceBacklogFill");
+    var backlogIgnoreBtn = document.getElementById("attendanceBacklogIgnore");
+    var backlogBackdrop = document.getElementById("attendanceBacklogBackdrop");
+    var monthlyDialog = document.getElementById("attendanceMonthlyDialog");
+    var monthlyBackdrop = document.getElementById("attendanceMonthlyBackdrop");
+    var monthlySel = document.getElementById("attendanceMonthlySelect");
+    var monthlyGoBtn = document.getElementById("attendanceMonthlyGo");
+    var monthlyCloseBtn = document.getElementById("attendanceMonthlyClose");
+    var shouldFastOpenToday = false;
+    if (!markBtn || !absBtn || !sumBtn || !submitBtn || !panel || !tbody || !statusLine) return;
+
+    var ATT_CACHE_KEY = "kv_attendance_cache_v1";
+    var ATT_PENDING_KEY = "kv_attendance_pending_v1";
+    var ATT_BULK_PENDING_KEY = "kv_attendance_bulk_pending_v1";
+    var ATT_BACKLOG_QUEUE_KEY = "kv_attendance_backlog_queue_v1";
+    var attendanceEditMode = false;
+    var currentAttendanceDate = todayYmd();
+
+    function todayYmd() {
+      var d = new Date();
+      var y = d.getFullYear();
+      var m = d.getMonth() + 1;
+      var dd = d.getDate();
+      return y + "-" + (m < 10 ? "0" : "") + m + "-" + (dd < 10 ? "0" : "") + dd;
+    }
+
+    function ymdToDmy(ymd) {
+      var s = String(ymd || "").trim();
+      var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return s;
+      return m[3] + "/" + m[2] + "/" + m[1];
+    }
+
+    function number2(v) {
+      var n = Number(v);
+      if (isNaN(n)) return "0.00";
+      return n.toFixed(2);
+    }
+
+    function currentSessionMonths() {
+      var now = new Date();
+      var startYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+      var out = [];
+      for (var i = 0; i < 12; i++) {
+        var d = new Date(startYear, 3 + i, 1);
+        var y = d.getFullYear();
+        var m = d.getMonth() + 1;
+        var val = y + "-" + (m < 10 ? "0" : "") + m;
+        var label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+        out.push({ value: val, label: label });
+      }
+      return out;
+    }
+
+    function openBacklogDialog(dateIso) {
+      if (!backlogDialog || !backlogMsg || !backlogHolidayBtn || !backlogFillBtn || !backlogIgnoreBtn) {
+        return Promise.resolve("fill");
+      }
+      backlogMsg.textContent = "Attendance for " + ymdToDmy(dateIso) + " is pending, choose one";
+      backlogDialog.hidden = false;
+      backlogDialog.setAttribute("aria-hidden", "false");
+      return new Promise(function (resolve) {
+        function done(val) {
+          backlogDialog.hidden = true;
+          backlogDialog.setAttribute("aria-hidden", "true");
+          backlogHolidayBtn.onclick = null;
+          backlogFillBtn.onclick = null;
+          backlogIgnoreBtn.onclick = null;
+          if (backlogBackdrop) backlogBackdrop.onclick = null;
+          resolve(val);
+        }
+        backlogHolidayBtn.onclick = function () { done("holiday"); };
+        backlogFillBtn.onclick = function () { done("fill"); };
+        backlogIgnoreBtn.onclick = function () { done("ignore"); };
+        if (backlogBackdrop) backlogBackdrop.onclick = function () { done("fill"); };
+      });
+    }
+
+    function openMonthlyDialog() {
+      if (!monthlyDialog || !monthlySel) return;
+      var months = currentSessionMonths();
+      monthlySel.innerHTML = "";
+      for (var i = 0; i < months.length; i++) {
+        var o = document.createElement("option");
+        o.value = months[i].value;
+        o.textContent = months[i].label;
+        monthlySel.appendChild(o);
+      }
+      var t = todayYmd().slice(0, 7);
+      if ([].some.call(monthlySel.options, function (x) { return x.value === t; })) monthlySel.value = t;
+      monthlyDialog.hidden = false;
+      monthlyDialog.setAttribute("aria-hidden", "false");
+    }
+
+    function closeMonthlyDialog() {
+      if (!monthlyDialog) return;
+      monthlyDialog.hidden = true;
+      monthlyDialog.setAttribute("aria-hidden", "true");
+    }
+
+    function renderMonthlyReportModal(monthVal, res) {
+      var title = "Monthly attendance report of " + String(res.monthLabel || monthVal);
+      var table = [[
+        "Roll No",
+        "Name of student",
+        "Attendance for the selected month",
+        "Total attendance upto month preceding selected month",
+        "Total attendance upto selected month",
+        "Selected month percentage attendance",
+        "Overall percentage attendance upto selected month",
+      ]];
+      var rows = res.rows || [];
+      for (var i = 0; i < rows.length; i++) {
+        table.push([
+          String(rows[i].rollNo || ""),
+          String(rows[i].studentName || ""),
+          String(rows[i].monthAttendance || 0),
+          String(rows[i].uptoPrev || 0),
+          String(rows[i].uptoMonth || 0),
+          number2(rows[i].monthPct || 0) + "%",
+          number2(rows[i].overallPct || 0) + "%",
+        ]);
+      }
+      openModal(title, table, {
+        subtitle: "",
+        summaryPairs: [
+          { label: "Number of working days of selected month", value: String(res.workingDaysMonth || 0) },
+          { label: "Total attendance of the selected month", value: String(res.totalAttendanceMonth || 0) },
+          { label: "Average attendance of the selected month", value: number2(res.averageAttendanceMonth || 0) },
+          { label: "Total working days upto month preceding selected month", value: String(res.workingDaysPrev || 0) },
+          { label: "Total working days till selected month", value: String(res.workingDaysTill || 0) },
+        ],
+        exportable: true,
+        headerBlue: true,
+        percentColumns: [5, 6],
+        percentStartRow: 1,
+      });
+    }
+
+    function setAttendanceStatus(msg) {
+      statusLine.textContent = "Status: " + String(msg || "");
+    }
+
+    function hasSheets() {
+      return !!(window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl());
+    }
+
+    function loadAttendanceCache() {
+      try {
+        var raw = localStorage.getItem(ATT_CACHE_KEY);
+        var obj = raw ? JSON.parse(raw) : {};
+        return obj && typeof obj === "object" ? obj : {};
+      } catch (_e) {
+        return {};
+      }
+    }
+
+    function saveAttendanceCache(cache) {
+      try {
+        localStorage.setItem(ATT_CACHE_KEY, JSON.stringify(cache || {}));
+      } catch (_e) {}
+    }
+
+    function loadAttendancePending() {
+      try {
+        var raw = localStorage.getItem(ATT_PENDING_KEY);
+        var arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (_e) {
+        return [];
+      }
+    }
+
+    function saveAttendancePending(arr) {
+      try {
+        localStorage.setItem(ATT_PENDING_KEY, JSON.stringify(Array.isArray(arr) ? arr : []));
+      } catch (_e) {}
+    }
+
+    function loadAttendanceBulkPending() {
+      try {
+        var raw = localStorage.getItem(ATT_BULK_PENDING_KEY);
+        var arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (_e) {
+        return [];
+      }
+    }
+
+    function saveAttendanceBulkPending(arr) {
+      try {
+        localStorage.setItem(ATT_BULK_PENDING_KEY, JSON.stringify(Array.isArray(arr) ? arr : []));
+      } catch (_e) {}
+    }
+
+    function loadBacklogQueueCache() {
+      try {
+        var raw = localStorage.getItem(ATT_BACKLOG_QUEUE_KEY);
+        var obj = raw ? JSON.parse(raw) : null;
+        if (!obj || typeof obj !== "object") return { beforeDate: "", dates: [] };
+        return {
+          beforeDate: String(obj.beforeDate || ""),
+          dates: Array.isArray(obj.dates) ? obj.dates.slice() : [],
+        };
+      } catch (_e) {
+        return { beforeDate: "", dates: [] };
+      }
+    }
+
+    function saveBacklogQueueCache(beforeDate, dates) {
+      try {
+        localStorage.setItem(ATT_BACKLOG_QUEUE_KEY, JSON.stringify({
+          beforeDate: String(beforeDate || ""),
+          dates: Array.isArray(dates) ? dates : [],
+        }));
+      } catch (_e) {}
+    }
+
+    function upsertBulkPending(date, status) {
+      var q = loadAttendanceBulkPending();
+      var found = false;
+      for (var i = 0; i < q.length; i++) {
+        if (String(q[i] && q[i].date || "") === String(date)) {
+          q[i] = { date: date, status: status };
+          found = true;
+          break;
+        }
+      }
+      if (!found) q.push({ date: date, status: status });
+      saveAttendanceBulkPending(q);
+    }
+
+    function removeBulkPending(date) {
+      var q = loadAttendanceBulkPending().filter(function (x) {
+        return String(x && x.date || "") !== String(date);
+      });
+      saveAttendanceBulkPending(q);
+    }
+
+    function upsertPending(date, entries) {
+      var q = loadAttendancePending();
+      var found = false;
+      for (var i = 0; i < q.length; i++) {
+        if (String(q[i] && q[i].date || "") === date) {
+          q[i] = { date: date, entries: entries };
+          found = true;
+          break;
+        }
+      }
+      if (!found) q.push({ date: date, entries: entries });
+      saveAttendancePending(q);
+    }
+
+    function removePending(date) {
+      var q = loadAttendancePending().filter(function (x) {
+        return String(x && x.date || "") !== String(date);
+      });
+      saveAttendancePending(q);
+    }
+
+    function setStatusSelectClass(sel) {
+      if (!sel) return;
+      var v = String(sel.value || "P").toUpperCase();
+      sel.classList.remove("status-present", "status-absent");
+      sel.classList.add(v === "A" ? "status-absent" : "status-present");
+    }
+
+    function sortedAttendanceEntries(entries) {
+      return (entries || []).slice().sort(function (a, b) {
+        var ar = String(a && a.rollNo != null ? a.rollNo : "").trim();
+        var br = String(b && b.rollNo != null ? b.rollNo : "").trim();
+        var an = Number(ar);
+        var bn = Number(br);
+        var aIsNum = !isNaN(an);
+        var bIsNum = !isNaN(bn);
+        if (aIsNum && bIsNum) return an - bn;
+        return ar.localeCompare(br);
+      });
+    }
+
+    function renderAttendanceMarkTable(entries) {
+      var list = sortedAttendanceEntries(entries);
+      tbody.innerHTML = "";
+      if (!list.length) {
+        panel.hidden = true;
+        return;
+      }
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        var tr = document.createElement("tr");
+        var roll = String(e.rollNo != null ? e.rollNo : "").trim() || "—";
+        var name = String(e.studentName != null ? e.studentName : "").trim() || "—";
+        var cur = String(e.status || "").toUpperCase() === "A" ? "A" : "P";
+        tr.innerHTML =
+          "<td>" + escapeHtml(roll) + "</td>" +
+          "<td>" + escapeHtml(name) + "</td>" +
+          '<td><select class="attendance-status-select" data-roll="' + escapeHtml(roll) + '" data-name="' + escapeHtml(name) + '" data-gender="' + escapeHtml(String(e.gender || "")) + '">' +
+          '<option value="P">Present</option>' +
+          '<option value="A">Absent</option>' +
+          "</select></td>";
+        tbody.appendChild(tr);
+        var sel = tr.querySelector("select.attendance-status-select");
+        if (sel) {
+          sel.value = cur;
+          setStatusSelectClass(sel);
+          sel.addEventListener("change", function () {
+            setStatusSelectClass(this);
+          });
+        }
+      }
+      panel.hidden = false;
+    }
+
+    function setSubmitLabel() {
+      submitBtn.textContent = attendanceEditMode ? "Update" : "Submit";
+    }
+
+    function setMarkBtnLabel(marked) {
+      markBtn.textContent = marked ? "Modify Today's Attendance" : "Mark today attendance";
+    }
+
+    function setAttendancePostMarkButtonsVisible(markedToday) {
+      absBtn.hidden = !markedToday;
+      sumBtn.hidden = !markedToday;
+    }
+
+    function buildEntriesFromLocalStudents() {
+      var list = studentsForMarksEntry(students);
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        out.push({
+          rollNo: String(list[i]["R.NO."] != null ? list[i]["R.NO."] : "").trim(),
+          studentName: String(list[i]["Student Name"] || "").trim(),
+          gender: String(list[i]["Gender"] || "").trim(),
+          status: "P",
+        });
+      }
+      return out;
+    }
+
+    function primeTodayAttendanceDraftFromStudents() {
+      var date = todayYmd();
+      var cache = loadAttendanceCache();
+      var cur = cache[date];
+      if (cur && cur.marked) return;
+      cache[date] = {
+        date: date,
+        dayLabel: date,
+        entries: buildEntriesFromLocalStudents(),
+        marked: false,
+        synced: !!(cur && cur.synced),
+        pending: false,
+        savedAt: new Date().toISOString(),
+      };
+      saveAttendanceCache(cache);
+    }
+
+    function syncAttendanceDateInBackground(date, entries) {
+      if (!hasSheets()) return Promise.resolve(false);
+      return KVSheets.sheetsCall("saveAttendanceByDate", { date: date, entries: entries })
+        .then(function () {
+          removePending(date);
+          var cache = loadAttendanceCache();
+          if (cache[date]) {
+            cache[date].synced = true;
+            cache[date].pending = false;
+            cache[date].savedAt = new Date().toISOString();
+            saveAttendanceCache(cache);
+          }
+          setAttendanceStatus("Attendance synced to Google Sheets.");
+          return true;
+        })
+        .catch(function () {
+          upsertPending(date, entries);
+          var cache = loadAttendanceCache();
+          if (cache[date]) {
+            cache[date].synced = false;
+            cache[date].pending = true;
+            saveAttendanceCache(cache);
+          }
+          setAttendanceStatus("Saved locally. Sync pending (network/server slow).");
+          return false;
+        });
+    }
+
+    function retryPendingAttendanceInBackground() {
+      if (!hasSheets()) return;
+      var q = loadAttendancePending();
+      if (!q.length) return;
+      var i = 0;
+      function next() {
+        if (i >= q.length) return;
+        var item = q[i++];
+        KVSheets.sheetsCall("saveAttendanceByDate", { date: item.date, entries: item.entries })
+          .then(function () {
+            removePending(item.date);
+            var cache = loadAttendanceCache();
+            if (cache[item.date]) {
+              cache[item.date].synced = true;
+              cache[item.date].pending = false;
+              saveAttendanceCache(cache);
+            }
+          })
+          .catch(function () {})
+          .finally(next);
+      }
+      next();
+    }
+
+    function runAttendanceBackgroundSync(opts) {
+      opts = opts || {};
+      retryPendingAttendanceInBackground();
+      retryPendingBulkAttendanceInBackground();
+      if (opts.refreshToday) refreshAttendanceByDateFromSheets(todayYmd());
+      if (opts.preloadBacklog && hasSheets()) {
+        KVSheets.sheetsCall("getPendingAttendanceDates", { beforeDate: todayYmd(), skipDates: [] })
+          .then(function (res) {
+            var dates = Array.isArray(res && res.dates) ? res.dates : [];
+            saveBacklogQueueCache(todayYmd(), dates);
+          })
+          .catch(function () {});
+      }
+    }
+
+    function retryPendingBulkAttendanceInBackground() {
+      if (!hasSheets()) return;
+      var q = loadAttendanceBulkPending();
+      if (!q.length) return;
+      var i = 0;
+      function next() {
+        if (i >= q.length) return;
+        var item = q[i++];
+        KVSheets.sheetsCall("markAttendanceDateBulk", { date: item.date, status: item.status })
+          .then(function () {
+            removeBulkPending(item.date);
+            var cache = loadAttendanceCache();
+            if (cache[item.date]) {
+              cache[item.date].synced = true;
+              cache[item.date].pending = false;
+              saveAttendanceCache(cache);
+            }
+          })
+          .catch(function () {})
+          .finally(next);
+      }
+      next();
+    }
+
+    function summaryFromEntries(entries, dayLabel, date) {
+      var out = {
+        dayLabel: dayLabel || date,
+        totals: { girls: 0, boys: 0, total: 0 },
+        present: { girls: 0, boys: 0, total: 0 },
+        absent: { girls: 0, boys: 0, total: 0 },
+      };
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i] || {};
+        var g = String(e.gender || "").trim().toLowerCase();
+        var isGirl = g === "female" || g === "f" || g === "girl";
+        var isBoy = g === "male" || g === "m" || g === "boy";
+        var st = String(e.status || "P").toUpperCase() === "A" ? "A" : "P";
+        out.totals.total++;
+        if (isGirl) out.totals.girls++;
+        else if (isBoy) out.totals.boys++;
+        if (st === "A") {
+          out.absent.total++;
+          if (isGirl) out.absent.girls++;
+          else if (isBoy) out.absent.boys++;
+        } else {
+          out.present.total++;
+          if (isGirl) out.present.girls++;
+          else if (isBoy) out.present.boys++;
+        }
+      }
+      return out;
+    }
+
+    function refreshAttendanceByDateFromSheets(date) {
+      if (!hasSheets()) return Promise.resolve(null);
+      return KVSheets.sheetsCall("getAttendanceByDate", { date: date })
+        .then(function (res) {
+          var cache = loadAttendanceCache();
+          var local = cache[date];
+          if (!(local && local.pending)) {
+            cache[date] = {
+              date: date,
+              dayLabel: res.dayLabel || date,
+              entries: (res && res.entries) || [],
+              marked: !!(res && res.marked),
+              synced: true,
+              pending: false,
+              savedAt: new Date().toISOString(),
+            };
+            saveAttendanceCache(cache);
+            if (date === todayYmd()) {
+              setMarkBtnLabel(!!cache[date].marked);
+              setAttendancePostMarkButtonsVisible(!!cache[date].marked);
+            }
+          }
+          return res;
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+
+    function openAttendanceForDate(date, forceFillMode) {
+      currentAttendanceDate = String(date || todayYmd());
+      var cache = loadAttendanceCache();
+      var c = cache[currentAttendanceDate];
+      var marked = !!(c && c.marked) && !forceFillMode;
+      attendanceEditMode = marked;
+      setSubmitLabel();
+      var entries = (c && c.entries && c.entries.length) ? c.entries : buildEntriesFromLocalStudents();
+      renderAttendanceMarkTable(entries);
+      setAttendanceStatus((marked ? "Modify mode for " : "Mark attendance for ") + ymdToDmy(currentAttendanceDate) + ".");
+      if (hasSheets() && !(c && c.pending)) {
+        refreshAttendanceByDateFromSheets(currentAttendanceDate).then(function () {
+          var fresh = loadAttendanceCache()[currentAttendanceDate];
+          var fMarked = !!(fresh && fresh.marked) && !forceFillMode;
+          attendanceEditMode = fMarked;
+          setSubmitLabel();
+          if (currentAttendanceDate === todayYmd()) setMarkBtnLabel(fMarked);
+        });
+      }
+    }
+
+    function runBacklogFlowThenOpenToday() {
+      var today = todayYmd();
+      if (!hasSheets()) {
+        openAttendanceForDate(today, false);
+        return;
+      }
+      var localHandled = {};
+      var pendBulk = loadAttendanceBulkPending();
+      for (var pbi = 0; pbi < pendBulk.length; pbi++) {
+        if (pendBulk[pbi] && pendBulk[pbi].date) localHandled[String(pendBulk[pbi].date)] = true;
+      }
+      function applyBulkLocal(dateIso, status, msg) {
+        var c = loadAttendanceCache();
+        c[dateIso] = {
+          date: dateIso,
+          dayLabel: ymdToDmy(dateIso),
+          entries: buildEntriesFromLocalStudents().map(function (e) {
+            e.status = status;
+            return e;
+          }),
+          marked: true,
+          synced: false,
+          pending: true,
+          savedAt: new Date().toISOString(),
+        };
+        saveAttendanceCache(c);
+        upsertBulkPending(dateIso, status);
+        localHandled[dateIso] = true;
+        retryPendingBulkAttendanceInBackground();
+        setAttendanceStatus(msg + " Syncing in background...");
+      }
+
+      function presentBacklogFromQueue(queueRef) {
+        while (queueRef.length && localHandled[queueRef[0]]) queueRef.shift();
+        saveBacklogQueueCache(today, queueRef);
+        if (!queueRef.length) {
+          openAttendanceForDate(today, false);
+          return;
+        }
+        var oldDate = queueRef[0];
+        openBacklogDialog(oldDate).then(function (choice) {
+          if (choice === "holiday") {
+            applyBulkLocal(oldDate, "H", "Marked " + ymdToDmy(oldDate) + " as holiday locally.");
+            queueRef.shift();
+            presentBacklogFromQueue(queueRef);
+            return;
+          }
+          if (choice === "ignore") {
+            applyBulkLocal(oldDate, "I", "Ignored " + ymdToDmy(oldDate) + " locally (I).");
+            queueRef.shift();
+            presentBacklogFromQueue(queueRef);
+            return;
+          }
+          openAttendanceForDate(oldDate, true);
+        });
+      }
+
+      var cached = loadBacklogQueueCache();
+      if (shouldFastOpenToday) {
+        shouldFastOpenToday = false;
+        openAttendanceForDate(today, false);
+        if (hasSheets()) refreshAttendanceByDateFromSheets(today);
+        return;
+      }
+      if (cached.beforeDate === today && cached.dates.length) {
+        presentBacklogFromQueue(cached.dates.slice());
+        return;
+      }
+      // Open instantly from local cache; fetch backlog queue in background.
+      openAttendanceForDate(today, false);
+      KVSheets.sheetsCall("getPendingAttendanceDates", { beforeDate: today, skipDates: Object.keys(localHandled) })
+        .then(function (res) {
+          var dates = Array.isArray(res && res.dates) ? res.dates.slice() : [];
+          saveBacklogQueueCache(today, dates);
+          if (dates.length) {
+            setAttendanceStatus(
+              "Past pending attendance found for " + ymdToDmy(dates[0]) + ". You can fill from next click."
+            );
+          }
+        })
+        .catch(function () {
+          // Keep already opened local list.
+        });
+    }
+
+    markBtn.addEventListener("click", function () {
+      var today = todayYmd();
+      var c = loadAttendanceCache()[today];
+      // When today's attendance already exists, open modify immediately.
+      if (c && c.marked) {
+        shouldFastOpenToday = true;
+      }
+      runBacklogFlowThenOpenToday();
+    });
+
+    submitBtn.addEventListener("click", function () {
+      var sels = tbody.querySelectorAll("select.attendance-status-select");
+      if (!sels.length) {
+        alert("Click 'Mark today attendance' first.");
+        return;
+      }
+      var date = String(currentAttendanceDate || todayYmd());
+      var payloadEntries = [];
+      for (var i = 0; i < sels.length; i++) {
+        var s = sels[i];
+        payloadEntries.push({
+          rollNo: String(s.getAttribute("data-roll") || "").trim(),
+          studentName: String(s.getAttribute("data-name") || "").trim(),
+          gender: String(s.getAttribute("data-gender") || "").trim(),
+          status: String(s.value || "P").toUpperCase() === "A" ? "A" : "P",
+        });
+      }
+      var cache = loadAttendanceCache();
+      cache[date] = {
+        date: date,
+        dayLabel: date,
+        entries: payloadEntries,
+        marked: true,
+        synced: false,
+        pending: true,
+        savedAt: new Date().toISOString(),
+      };
+      saveAttendanceCache(cache);
+      upsertPending(date, payloadEntries);
+      if (date === todayYmd()) {
+        setMarkBtnLabel(true);
+        setAttendancePostMarkButtonsVisible(true);
+      }
+
+      var isUpdate = attendanceEditMode;
+      setAttendanceStatus((isUpdate ? "Attendance updated for " : "Attendance marked for ") + date + " (saved locally). Syncing in background...");
+      if (typeof window.KV_showOkDialog === "function") {
+        window.KV_showOkDialog(isUpdate ? "Attendance updated." : "Attendance marked for the day.");
+      } else {
+        alert(isUpdate ? "Attendance updated." : "Attendance marked for the day.");
+      }
+      panel.hidden = true;
+      attendanceEditMode = true;
+      setSubmitLabel();
+      syncAttendanceDateInBackground(date, payloadEntries);
+      if (date !== todayYmd()) {
+        var b = loadBacklogQueueCache();
+        if (b.beforeDate === todayYmd()) {
+          b.dates = b.dates.filter(function (d) { return String(d) !== String(date); });
+          saveBacklogQueueCache(b.beforeDate, b.dates);
+        }
+        setTimeout(function () {
+          runBacklogFlowThenOpenToday();
+        }, 50);
+      }
+    });
+
+    absBtn.addEventListener("click", function () {
+      var date = todayYmd();
+      var c = loadAttendanceCache()[date];
+      function showFromCache(current) {
+        if (!(current && current.marked && current.entries && current.entries.length)) return false;
+        var abs0 = current.entries.filter(function (e) { return String(e.status || "P").toUpperCase() === "A"; });
+        var rows0 = [["Roll No", "Student Name"]];
+        for (var i0 = 0; i0 < abs0.length; i0++) rows0.push([String(abs0[i0].rollNo || ""), String(abs0[i0].studentName || "")]);
+        if (!abs0.length) rows0.push(["—", "No absentees"]);
+        openModal("Today's Absentees (" + ymdToDmy(date) + ")", rows0, { exportable: false });
+        return true;
+      }
+      if (showFromCache(c)) {
+        if (hasSheets() && !(c && c.pending)) refreshAttendanceByDateFromSheets(date);
+        return;
+      }
+      if (!hasSheets()) {
+        alert("Attendance is not marked yet.");
+        return;
+      }
+      absBtn.disabled = true;
+      var prev = absBtn.textContent;
+      absBtn.textContent = "Loading…";
+      KVSheets.sheetsCall("getTodayAbsentees", { date: date })
+        .then(function (res) {
+          absBtn.disabled = false;
+          absBtn.textContent = prev;
+          if (!res.marked) {
+            alert("Attendance is not marked yet.");
+            return;
+          }
+          var abs = res.absentees || [];
+          var rows = [["Roll No", "Student Name"]];
+          for (var i = 0; i < abs.length; i++) rows.push([String(abs[i].rollNo || ""), String(abs[i].studentName || "")]);
+          if (!abs.length) rows.push(["—", "No absentees"]);
+          openModal("Today's Absentees (" + ymdToDmy(res.date || date) + ")", rows, { exportable: false });
+          refreshAttendanceByDateFromSheets(date);
+        })
+        .catch(function () {
+          absBtn.disabled = false;
+          absBtn.textContent = prev;
+          alert("Could not fetch absentees right now.");
+        });
+    });
+
+    sumBtn.addEventListener("click", function () {
+      var date = todayYmd();
+      var c = loadAttendanceCache()[date];
+      function showSummary(current) {
+        if (!(current && current.marked && current.entries && current.entries.length)) return false;
+        var s0 = summaryFromEntries(current.entries, current.dayLabel || date, date);
+        openModal("Today's Attendance Summary (" + ymdToDmy(date) + ")", [
+          ["Metric", "Girls", "Boys", "Total"],
+          ["Total", String(s0.totals.girls || 0), String(s0.totals.boys || 0), String(s0.totals.total || 0)],
+          ["Present", String(s0.present.girls || 0), String(s0.present.boys || 0), String(s0.present.total || 0)],
+          ["Absent", String(s0.absent.girls || 0), String(s0.absent.boys || 0), String(s0.absent.total || 0)],
+        ], { exportable: false, headerBlue: true });
+        return true;
+      }
+      if (showSummary(c)) {
+        if (hasSheets() && !(c && c.pending)) refreshAttendanceByDateFromSheets(date);
+        return;
+      }
+      if (!hasSheets()) {
+        alert("Attendance is not marked yet.");
+        return;
+      }
+      sumBtn.disabled = true;
+      var prev = sumBtn.textContent;
+      sumBtn.textContent = "Loading…";
+      KVSheets.sheetsCall("getTodayAttendanceSummary", { date: date })
+        .then(function (res) {
+          sumBtn.disabled = false;
+          sumBtn.textContent = prev;
+          if (!res.marked) {
+            alert("Attendance is not marked yet.");
+            return;
+          }
+          openModal("Today's Attendance Summary (" + ymdToDmy(res.date || date) + ")", [
+            ["Metric", "Girls", "Boys", "Total"],
+            ["Total", String(res.totals.girls || 0), String(res.totals.boys || 0), String(res.totals.total || 0)],
+            ["Present", String(res.present.girls || 0), String(res.present.boys || 0), String(res.present.total || 0)],
+            ["Absent", String(res.absent.girls || 0), String(res.absent.boys || 0), String(res.absent.total || 0)],
+          ], { exportable: false, headerBlue: true });
+          refreshAttendanceByDateFromSheets(date);
+        })
+        .catch(function () {
+          sumBtn.disabled = false;
+          sumBtn.textContent = prev;
+          alert("Could not fetch summary right now.");
+        });
+    });
+
+    if (monthlyBtn) {
+      monthlyBtn.addEventListener("click", function () {
+        if (!hasSheets()) {
+          alert("Configure the Google Apps Script web app URL in settings first.");
+          return;
+        }
+        openMonthlyDialog();
+      });
+    }
+
+    if (monthlyCloseBtn) monthlyCloseBtn.addEventListener("click", closeMonthlyDialog);
+    if (monthlyBackdrop) monthlyBackdrop.addEventListener("click", closeMonthlyDialog);
+    if (monthlyGoBtn) {
+      monthlyGoBtn.addEventListener("click", function () {
+        var monthVal = monthlySel ? String(monthlySel.value || "").trim() : "";
+        if (!monthVal) return;
+        monthlyGoBtn.disabled = true;
+        var prevTxt = monthlyGoBtn.textContent;
+        monthlyGoBtn.textContent = "Loading…";
+        KVSheets.sheetsCall("getMonthlyAttendanceReport", {
+          month: monthVal,
+        })
+          .then(function (res) {
+            monthlyGoBtn.disabled = false;
+            monthlyGoBtn.textContent = prevTxt;
+            closeMonthlyDialog();
+            renderMonthlyReportModal(monthVal, res);
+          })
+          .catch(function (err) {
+            monthlyGoBtn.disabled = false;
+            monthlyGoBtn.textContent = prevTxt;
+            alert(formatShortUserMessage(err && err.message ? err.message : err));
+          });
+      });
+    }
+
+    primeTodayAttendanceDraftFromStudents();
+    var initToday = loadAttendanceCache()[todayYmd()];
+    setMarkBtnLabel(!!(initToday && initToday.marked));
+    setAttendancePostMarkButtonsVisible(!!(initToday && initToday.marked));
+    runAttendanceBackgroundSync({ preloadBacklog: true });
+    refreshAttendanceByDateFromSheets(todayYmd()).then(function () {
+      var c = loadAttendanceCache()[todayYmd()];
+      setMarkBtnLabel(!!(c && c.marked));
+      setAttendancePostMarkButtonsVisible(!!(c && c.marked));
+    });
+    setSubmitLabel();
+    try {
+      window.__kvRunAttendanceBackgroundSync = runAttendanceBackgroundSync;
+      window.__kvPrimeAttendanceTodayDraft = primeTodayAttendanceDraftFromStudents;
+    } catch (_e) {}
+  }
+
+  function wireTimetableModule() {
+    var btnClass = document.getElementById("btnTimetableClass");
+    var btnTeacher = document.getElementById("btnTimetableTeacher");
+    if (!btnClass || !btnTeacher) return;
+
+    var TT_CACHE_SS = "kvTimetableDayV2";
+
+    function hasSheets() {
+      return !!(window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl());
+    }
+
+    function timetableYmdToday() {
+      try {
+        return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata" }).format(new Date()).slice(0, 10);
+      } catch (_e) {
+        var d = new Date();
+        var y = d.getFullYear();
+        var m = d.getMonth() + 1;
+        var dd = d.getDate();
+        return y + "-" + (m < 10 ? "0" : "") + m + "-" + (dd < 10 ? "0" : "") + dd;
+      }
+    }
+
+    function timetableCacheRead() {
+      try {
+        var raw = sessionStorage.getItem(TT_CACHE_SS);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    function timetableCacheWrite(pack) {
+      try {
+        sessionStorage.setItem(TT_CACHE_SS, JSON.stringify(pack));
+      } catch (_e) {}
+    }
+
+    function timetablePackEnsure(ymd) {
+      var p = window.__kvTimetableDayPack;
+      if (!p || p.ymd !== ymd) {
+        p = { ymd: ymd, classRes: null, teacherRes: null };
+        window.__kvTimetableDayPack = p;
+      }
+      return p;
+    }
+
+    function timetablePackMerge(ymd, classRes, teacherRes) {
+      var p = timetablePackEnsure(ymd);
+      if (classRes) p.classRes = classRes;
+      if (teacherRes) p.teacherRes = teacherRes;
+      timetableCacheWrite(p);
+    }
+
+    var _timetablePrefetchInflight = null;
+    function prefetchTimetablesForToday() {
+      if (!hasSheets()) return;
+      var ymd = timetableYmdToday();
+      var p = window.__kvTimetableDayPack;
+      if (p && p.ymd === ymd && p.classRes && p.teacherRes && (p.classRes.slots || []).length) return;
+      var disk = timetableCacheRead();
+      if (disk && disk.ymd === ymd && disk.classRes && disk.teacherRes && (disk.classRes.slots || []).length) {
+        window.__kvTimetableDayPack = disk;
+        return;
+      }
+      if (_timetablePrefetchInflight) return;
+      _timetablePrefetchInflight = Promise.all([
+        KVSheets.sheetsCall("getClassTimetableForDate", { date: ymd }),
+        KVSheets.sheetsCall("getTeacherTimetableForDate", { date: ymd }),
+      ])
+        .then(function (arr) {
+          timetablePackMerge(ymd, arr[0], arr[1]);
+        })
+        .catch(function () {})
+        .finally(function () {
+          _timetablePrefetchInflight = null;
+        });
+    }
+
+    try {
+      var boot = timetableCacheRead();
+      if (boot && boot.ymd === timetableYmdToday()) window.__kvTimetableDayPack = boot;
+    } catch (_e) {}
+
+    try {
+      window.__kvTimetableOnShow = function () {};
+      window.__kvPrefetchTimetables = prefetchTimetablesForToday;
+    } catch (_e) {}
+
+    function openClassModalFromRes(res) {
+      var rows = [["Slot", "Time", "Subject", "Teacher"]];
+      var slots = (res && res.slots) || [];
+      for (var i = 0; i < slots.length; i++) {
+        var s = slots[i];
+        if (s.kind === "break") {
+          rows.push([String(s.label || "Break"), String(s.timeRange || ""), "—", "—"]);
+        } else {
+          rows.push([
+            String(s.label || ""),
+            String(s.timeRange || ""),
+            s.subject ? String(s.subject) : "—",
+            s.teacher ? String(s.teacher) : "—",
+          ]);
+        }
+      }
+      var title = (res && res.title ? res.title : "Class timetable") + " (" + (res && res.dateDisplay ? res.dateDisplay : "") + ")";
+      openModal(title, rows, { exportable: true, headerBlue: true });
+    }
+
+    function openTeacherModalFromRes(res) {
+      var rows = [["Slot", "Time", "Class", "Subject"]];
+      var slots = (res && res.slots) || [];
+      for (var j = 0; j < slots.length; j++) {
+        var t = slots[j];
+        if (t.kind === "break") {
+          rows.push([String(t.label || "Break"), String(t.timeRange || ""), "—", "—"]);
+        } else {
+          rows.push([
+            String(t.label || ""),
+            String(t.timeRange || ""),
+            t.clazz ? String(t.clazz) : "—",
+            t.subject ? String(t.subject) : "—",
+          ]);
+        }
+      }
+      var title2 =
+        (res && res.title ? res.title : "Teacher timetable") + " (" + (res && res.dateDisplay ? res.dateDisplay : "") + ")";
+      openModal(title2, rows, { exportable: true, headerBlue: true });
+    }
+
+    btnClass.addEventListener("click", function () {
+      if (!hasSheets()) {
+        alert("Configure the Google Apps Script web app URL in settings first.");
+        return;
+      }
+      var ymd = timetableYmdToday();
+      var pack = window.__kvTimetableDayPack;
+      if (pack && pack.ymd === ymd && pack.classRes && (pack.classRes.slots || []).length) {
+        openClassModalFromRes(pack.classRes);
+        return;
+      }
+      btnClass.disabled = true;
+      var prev = btnClass.textContent;
+      btnClass.textContent = "Loading…";
+      KVSheets.sheetsCall("getClassTimetableForDate", { date: ymd })
+        .then(function (res) {
+          timetablePackMerge(ymd, res, null);
+          openClassModalFromRes(res);
+        })
+        .catch(function (e) {
+          alert(formatShortUserMessage(e && e.message ? e.message : e));
+        })
+        .finally(function () {
+          btnClass.disabled = false;
+          btnClass.textContent = prev;
+        });
+    });
+
+    btnTeacher.addEventListener("click", function () {
+      if (!hasSheets()) {
+        alert("Configure the Google Apps Script web app URL in settings first.");
+        return;
+      }
+      var ymdT = timetableYmdToday();
+      var packT = window.__kvTimetableDayPack;
+      if (packT && packT.ymd === ymdT && packT.teacherRes && (packT.teacherRes.slots || []).length) {
+        openTeacherModalFromRes(packT.teacherRes);
+        return;
+      }
+      btnTeacher.disabled = true;
+      var prevT = btnTeacher.textContent;
+      btnTeacher.textContent = "Loading…";
+      KVSheets.sheetsCall("getTeacherTimetableForDate", { date: ymdT })
+        .then(function (res) {
+          timetablePackMerge(ymdT, null, res);
+          openTeacherModalFromRes(res);
+        })
+        .catch(function (e) {
+          alert(formatShortUserMessage(e && e.message ? e.message : e));
+        })
+        .finally(function () {
+          btnTeacher.disabled = false;
+          btnTeacher.textContent = prevT;
+        });
+    });
+  }
+
   function wireEvents() {
     wireAppNavigation();
+    wireInstructionsModal();
     wireQuerySubtabs();
+    wireConsolidatedSheets();
+    wireAttendanceModule();
+    wireTimetableModule();
+
+    var marksEntryToggle = document.getElementById("marksEntryToggle");
+    if (marksEntryToggle) {
+      marksEntryToggle.addEventListener("change", function () {
+        if (_marksEntryToggleProgrammatic) return;
+        if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+          _marksEntryToggleProgrammatic = true;
+          marksEntryToggle.checked = !_marksEntryToggle.checked;
+          _marksEntryToggleProgrammatic = false;
+          alert(formatShortUserMessage("Configure KV_SHEETS_WEB_APP_URL first.", 100));
+          return;
+        }
+        var want = marksEntryToggle.checked;
+        _marksEntryPolicySaveInFlight = true;
+        _marksEntryEnabled = want;
+        updateMarksPickerUI();
+        KVSheets.sheetsCall("setMarksEntryPolicy", { enabled: want })
+          .then(function (data) {
+            _marksEntryEnabled = data.marksEntryEnabled !== false;
+            syncMarksEntryToggleFromCache();
+            updateMarksPickerUI();
+          })
+          .catch(function (e) {
+            _marksEntryToggleProgrammatic = true;
+            marksEntryToggle.checked = !want;
+            _marksEntryToggleProgrammatic = false;
+            _marksEntryEnabled = !want;
+            updateMarksPickerUI();
+            alert(formatShortUserMessage(e.message || String(e)));
+          })
+          .finally(function () {
+            _marksEntryPolicySaveInFlight = false;
+            updateMarksEntryToggleRowState();
+          });
+      });
+    }
+
+    var btnHomeSync = document.getElementById("btnHomeSyncSheets");
+    if (btnHomeSync) {
+      var homeSyncDefaultLabel = btnHomeSync.textContent;
+      btnHomeSync.addEventListener("click", function () {
+        if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+          alert(
+            "Set KV_SHEETS_WEB_APP_URL in sheets-webapp-config.js (deployed web app URL) to sync with Google Sheets."
+          );
+          return;
+        }
+        var btn = btnHomeSync;
+        btn.disabled = true;
+        btn.textContent = "Syncing…";
+        pullSheetsIntoApp({ silent: false }).finally(function () {
+          btn.disabled = false;
+          btn.textContent = homeSyncDefaultLabel;
+        });
+      });
+    }
 
     var marksMaxEl = document.getElementById("marksMax");
     if (marksMaxEl) {
@@ -1518,26 +3586,42 @@
       marksMaxEl.addEventListener("change", function () {
         revalidateAllMarksInputs();
       });
+      marksMaxEl.addEventListener("blur", function () {
+        var t = String(this.value).trim();
+        if (!t) return;
+        var n = parseFloat(t.replace(/,/g, "."));
+        if (isNaN(n) || n <= 0) {
+          showMarksValidationMessage("Maximum marks must be a positive number.");
+          this.value = "";
+          revalidateAllMarksInputs();
+        }
+      });
     }
 
     var marksExamEl = document.getElementById("marksExam");
     if (marksExamEl) {
       marksExamEl.addEventListener("change", function () {
+        if (_marksSelectProgrammatic) return;
         rebuildMarksSubjectSelectForExam(this.value);
         _marksPickerEditing = false;
         editingMarksSlipId = null;
-        var cb0 = document.getElementById("btnMarksCancelEdit");
-        if (cb0) cb0.hidden = true;
+        if (typeof window !== "undefined") window.__marksEditRecord = null;
+        setMarksCancelEditingVisible(false);
+        marksClearEntryMetaFields();
+        renderMarksStudentTable();
         updateMarksPickerUI();
       });
     }
     var marksSubEl = document.getElementById("marksSubject");
     if (marksSubEl) {
       marksSubEl.addEventListener("change", function () {
+        if (_marksSelectProgrammatic) return;
         _marksPickerEditing = false;
         editingMarksSlipId = null;
-        var cb1 = document.getElementById("btnMarksCancelEdit");
-        if (cb1) cb1.hidden = true;
+        if (typeof window !== "undefined") window.__marksEditRecord = null;
+        setMarksCancelEditingVisible(false);
+        marksClearEntryMetaFields();
+        renderMarksStudentTable();
         updateMarksPickerUI();
       });
     }
@@ -1570,6 +3654,10 @@
     var btnEditSel = document.getElementById("btnMarksEditSelected");
     if (btnEditSel) {
       btnEditSel.addEventListener("click", function () {
+        if (!_marksEntryEnabled) {
+          showMarksValidationMessage(MARKS_ENTRY_DISABLED_MSG);
+          return;
+        }
         var res = _resolvedMarksSlip;
         if (!res || !res.available) return;
         if (res.source === "local") {
@@ -1580,8 +3668,14 @@
           alert("Sheets client not loaded.");
           return;
         }
+        var cachedDetail = getCachedSheetSlipDetail(res.slipId);
+        if (cachedDetail && cachedDetail.meta && cachedDetail.entries) {
+          var cachedRec = sheetApiToRecord(cachedDetail.meta, cachedDetail.entries, res.slipId);
+          applySlipToMarksForm(cachedRec);
+        }
         KVSheets.sheetsCall("getMarkSlip", { slipId: res.slipId })
           .then(function (data) {
+            setCachedSheetSlipDetail(res.slipId, data);
             var rec = sheetApiToRecord(data.meta, data.entries, res.slipId);
             applySlipToMarksForm(rec);
           })
@@ -1608,8 +3702,16 @@
           alert("Cannot reach Google Sheets for this slip. Check KV_SHEETS_WEB_APP_URL in sheets-webapp-config.js and deployment.");
           return;
         }
+        var cachedPdfDetail = getCachedSheetSlipDetail(res.slipId);
+        if (cachedPdfDetail && cachedPdfDetail.meta && cachedPdfDetail.entries) {
+          var cachedMeta = sheetsMetaToPdfMeta(cachedPdfDetail.meta);
+          var cachedRows = sheetsEntriesToPdfRows(cachedPdfDetail.meta, cachedPdfDetail.entries);
+          window.KVReports.downloadMarksSlipPdf(cachedMeta, cachedRows);
+          return;
+        }
         KVSheets.sheetsCall("getMarkSlip", { slipId: res.slipId })
           .then(function (data) {
+            setCachedSheetSlipDetail(res.slipId, data);
             var pdfMeta = sheetsMetaToPdfMeta(data.meta);
             var pdfRows = sheetsEntriesToPdfRows(data.meta, data.entries);
             window.KVReports.downloadMarksSlipPdf(pdfMeta, pdfRows);
@@ -1628,7 +3730,7 @@
         if (e.key === "Enter" || e.key === "ArrowDown") {
           if (marksCellBlocksNavigation(t)) {
             e.preventDefault();
-            alert(marksCellNavigationWarningMessage(t));
+            showMarksValidationMessage(marksCellNavigationWarningMessage(t));
             t.value = "";
             applyMarksCellValidation(t);
             t.focus();
@@ -1639,7 +3741,7 @@
         } else if (e.key === "ArrowUp") {
           if (marksCellBlocksNavigation(t)) {
             e.preventDefault();
-            alert(marksCellNavigationWarningMessage(t));
+            showMarksValidationMessage(marksCellNavigationWarningMessage(t));
             t.value = "";
             applyMarksCellValidation(t);
             t.focus();
@@ -1679,7 +3781,46 @@
         box.innerHTML = '<span class="muted">Pick student and column</span>';
         return;
       }
-      box.textContent = getSingleValue(students, name, parseInt(col, 10));
+      var colIdx = parseInt(col, 10);
+      var h = HEADERS[colIdx];
+      if (/^photo$/i.test(String(h || ""))) {
+        var row = null;
+        var ri;
+        for (ri = 0; ri < students.length; ri++) {
+          if (String(students[ri]["Student Name"] || "").trim() === String(name).trim()) {
+            row = students[ri];
+            break;
+          }
+        }
+        var url = row ? photoUrlFromMasterCell(studentPhotoRawFromRow(row)) : "";
+        box.innerHTML = "";
+        if (!url) {
+          box.innerHTML = "<span class=\"muted\">—</span>";
+          return;
+        }
+        var wrap = document.createElement("div");
+        wrap.className = "query-photo-detail-wrap";
+        var img = document.createElement("img");
+        img.className = "query-photo-detail";
+        img.alt = "";
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        img.src = url;
+        img.addEventListener("error", function () {
+          box.innerHTML = "<span class=\"muted\">—</span>";
+        });
+        wrap.appendChild(img);
+        var a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.className = "card-desc small";
+        a.textContent = "Open photo link";
+        wrap.appendChild(a);
+        box.appendChild(wrap);
+        return;
+      }
+      box.textContent = getSingleValue(students, name, colIdx);
     }
 
     document.getElementById("sec2Header").addEventListener("change", updateSec2Sub);
@@ -1775,6 +3916,10 @@
     });
 
     document.getElementById("btnMarksSubmit").addEventListener("click", function () {
+      if (!_marksEntryEnabled) {
+        showMarksValidationMessage(MARKS_ENTRY_DISABLED_MSG);
+        return;
+      }
       var data = tryBuildMarksSlipRecord();
       if (!data) return;
       var wasEditing = editingMarksSlipId != null;
@@ -1794,40 +3939,75 @@
         }
         if (!replaced) allMs.push(data.record);
         editingMarksSlipId = null;
-        var cbtn = document.getElementById("btnMarksCancelEdit");
-        if (cbtn) cbtn.hidden = true;
+        setMarksCancelEditingVisible(false);
       } else {
         allMs.push(data.record);
       }
       saveMarksheets(allMs);
       _marksPickerEditing = false;
+      if (typeof window !== "undefined") window.__marksEditRecord = null;
+      setMarksCancelEditingVisible(false);
+      marksClearEntryMetaFields();
+      rebuildMarksExamSelectOptions();
+      var mex0 = document.getElementById("marksExam");
+      rebuildMarksSubjectSelectForExam(mex0 ? mex0.value : "");
       renderMarksStudentTable();
-      var sheetP = Promise.resolve();
+      updateMarksPickerUI();
+      /* Same as teacher marks: confirm immediately after local save + UI paint, not after Sheets API. */
+      var savedMsg = wasEditing ? "Marks updated." : "Marks saved.";
+      function showMarksSavedOptimistic() {
+        if (typeof window.KV_showOkDialog === "function") {
+          window.KV_showOkDialog(savedMsg);
+        } else {
+          alert(savedMsg);
+        }
+      }
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(function () {
+          setTimeout(showMarksSavedOptimistic, 0);
+        });
+      } else {
+        setTimeout(showMarksSavedOptimistic, 0);
+      }
+      var sheetP = Promise.resolve(true);
       if (window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl()) {
         var sheetAction = wasEditing ? "replaceMarkSlip" : "saveMarkSlip";
-        sheetP = KVSheets.sheetsCall(sheetAction, { record: data.record }).catch(function (e) {
-          alert("Saved locally, but Google Sheets sync failed: " + (e.message || String(e)));
-        });
+        sheetP = KVSheets.sheetsCall(sheetAction, { record: data.record })
+          .then(function () {
+            removeMarksPendingById(data.record.id);
+            return true;
+          })
+          .catch(function (e) {
+            upsertMarksPending(data.record, sheetAction);
+            showMarksValidationMessage(
+              formatShortUserMessage(
+                "Saved on device only. Sheets sync failed: " + (e.message || String(e)),
+                200
+              )
+            );
+            return false;
+          });
       }
       sheetP.finally(function () {
         syncMarkSlipsListFromSheets({ silent: true }).finally(function () {
-          rebuildMarksExamSelectOptions();
-          var mex = document.getElementById("marksExam");
-          rebuildMarksSubjectSelectForExam(mex ? mex.value : "");
-          updateMarksPickerUI();
+          if (!marksHasUnsavedMarksDraft()) {
+            rebuildMarksExamSelectOptions();
+            var mex = document.getElementById("marksExam");
+            rebuildMarksSubjectSelectForExam(mex ? mex.value : "");
+            updateMarksPickerUI();
+          }
         });
       });
-      alert(
-        wasEditing
-          ? "Marks slip updated (replaced in storage" +
-              (window.KVSheets && KVSheets.getSheetsUrl() ? " and Google Sheets" : "") +
-              ")."
-          : "Marks slip saved on this device (browser storage)."
-      );
     });
 
-    document.getElementById("btnMarksCancelEdit").addEventListener("click", function () {
-      clearMarksEditMode();
+    ;["btnMarksCancelEdit", "btnMarksCancelEditFooter"].forEach(function (cid) {
+      var cel = document.getElementById(cid);
+      if (cel) {
+        cel.addEventListener("click", function (ev) {
+          if (ev) ev.preventDefault();
+          clearMarksEditMode();
+        });
+      }
     });
 
     document.getElementById("modalClose").addEventListener("click", closeModal);
@@ -1972,16 +4152,13 @@
     refreshUI();
     rebuildMarksExamSelectOptions();
     rebuildMarksSubjectSelectForExam("");
-    startMasterAutoSyncTimers();
-    Promise.all([
-      syncStudentsFromSheets({ silent: true }),
-      syncMarkSlipsListFromSheets({ silent: true }),
-    ]).finally(function () {
-      refreshUI();
-      rebuildMarksExamSelectOptions();
-      var mex = document.getElementById("marksExam");
-      rebuildMarksSubjectSelectForExam(mex ? mex.value : "");
-    });
+    updateMarksEntryToggleRowState();
+    wireSheetsReconnectSync();
+    startForegroundSheetPolling();
+    pullSheetsIntoApp({ silent: true });
+    try {
+      if (typeof window.__kvPrefetchTimetables === "function") window.__kvPrefetchTimetables();
+    } catch (_e) {}
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

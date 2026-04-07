@@ -55,12 +55,14 @@ body {
 }
 
 .sidebar-brand {
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0 16px 4px;
-  line-height: 1.35;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  padding: 0 14px 4px;
+  line-height: 1.3;
+  hyphens: auto;
+  word-break: break-word;
 }
 
 .sidebar-class-line {
@@ -81,28 +83,69 @@ body {
   line-height: 1.4;
 }
 
+.top-bar--dashboard .top-bar-dashboard-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  padding-right: 64px;
+}
+
+.top-bar-center-block {
+  text-align: center;
+  max-width: min(100%, 640px);
+}
+
+.top-bar-app-name {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--maroon);
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
 .top-bar-school-line {
-  margin: 0 0 6px;
-  font-size: 0.8rem;
+  margin: 6px 0 0;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--maroon);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  line-height: 1.3;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
 }
 
-.setup-guide-card .setup-steps {
+.app-top-logo {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(107, 28, 46, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.setup-guide-card .setup-steps,
+.setup-guide-card--modal .setup-steps {
   margin: 0;
   padding-left: 1.35rem;
   counter-reset: setupstep;
 }
 
-.setup-guide-card .setup-steps > li {
+.setup-guide-card .setup-steps > li,
+.setup-guide-card--modal .setup-steps > li {
   margin-bottom: 1.35rem;
   padding-left: 0.35rem;
 }
 
-.setup-guide-card .setup-steps > li::marker {
+.setup-guide-card .setup-steps > li::marker,
+.setup-guide-card--modal .setup-steps > li::marker {
   font-weight: 700;
   color: var(--maroon);
 }
@@ -115,23 +158,169 @@ body {
 }
 
 .setup-guide-card p,
-.setup-guide-card ul {
+.setup-guide-card ul,
+.setup-guide-card--modal p,
+.setup-guide-card--modal ul {
   margin: 0 0 10px;
   font-size: 0.88rem;
   color: var(--muted);
   line-height: 1.5;
 }
 
-.setup-guide-card ul {
+.setup-guide-card ul,
+.setup-guide-card--modal ul {
   padding-left: 1.2rem;
 }
 
-.setup-guide-card code {
+.setup-guide-card code,
+.setup-guide-card--modal code {
   font-size: 0.84em;
   padding: 0.1em 0.35em;
   background: var(--surface2);
   border-radius: 4px;
   border: 1px solid var(--border);
+}
+
+.setup-guide-card--modal {
+  padding: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  display: block;
+}
+
+/* Instructions modal (same pattern as teacher marks page) */
+.app-instr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.app-instr-modal[hidden] {
+  display: none !important;
+}
+
+.app-instr-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.app-instr-modal-panel {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+}
+
+.app-instr-modal-panel--wide {
+  max-width: min(640px, 100vw - 32px);
+}
+
+.modal-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.modal-panel-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--maroon);
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-generated-by {
+  font-size: 0.65rem;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding-top: 2px;
+}
+
+.kv-panel-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.kv-panel-head-row .kv-consolidated-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.kv-dialog-brand-row {
+  text-align: right;
+  margin: -4px 0 8px;
+}
+
+.kv-ok-dialog-panel--feature {
+  text-align: left;
+}
+
+.kv-ok-dialog-panel--feature .kv-ok-dialog-msg {
+  text-align: center;
+}
+
+
+.app-instr-list {
+  margin: 0 0 16px;
+  padding-left: 1.2rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.app-instr-list li {
+  margin-bottom: 10px;
+}
+
+.app-instr-modal-footer {
+  margin-top: 4px;
+}
+
+.card-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 2px solid rgba(107, 28, 46, 0.2);
+}
+
+.card-head-row .card-title {
+  border-bottom: none;
+  padding-bottom: 0;
+  flex: 1 1 auto;
+  min-width: 10rem;
+}
+
+.marks-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: flex-end;
 }
 
 .sidebar-nav {
@@ -192,10 +381,6 @@ body {
   border-bottom: 2px solid var(--maroon);
 }
 
-.top-bar--compact .brand {
-  font-size: 1.35rem;
-}
-
 .home-stat {
   margin: 12px 0 8px;
   font-size: 1.15rem;
@@ -211,6 +396,10 @@ body {
   font-weight: 500;
   font-size: 0.95rem;
   color: var(--text);
+}
+
+.home-sync-row {
+  margin-top: 4px;
 }
 
 .subtabs.query-subtabs {
@@ -587,6 +776,50 @@ code {
 }
 
 /* Report modal — mirrors ReportPopup.html (sheet dashboard) */
+/* Short OK popup (downloads, marks success) */
+.kv-ok-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1003;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.kv-ok-dialog[hidden] {
+  display: none !important;
+}
+
+.kv-ok-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.kv-ok-dialog-panel {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.kv-ok-dialog-msg {
+  margin: 0 0 18px;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.kv-ok-dialog-panel .btn.primary {
+  min-width: 88px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -617,14 +850,26 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 10px;
   padding: 16px 20px;
   border-bottom: 2px solid var(--navy);
   flex-shrink: 0;
   text-align: center;
+  position: relative;
 }
 
-.report-header > div:first-child {
+.report-header-main {
   flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.report-header-brand {
+  position: absolute;
+  top: 14px;
+  right: 52px;
+  padding: 0;
+  margin: 0;
 }
 
 .school-name {
@@ -639,6 +884,40 @@ code {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--subtitle);
+}
+
+.report-subtitle {
+  margin: 6px 0 0;
+  font-size: 0.86rem;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 10px 18px;
+  padding: 12px 20px 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.report-summary-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 28px;
+}
+
+.report-summary-label {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.report-summary-value {
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .report-modal .table-wrap {
@@ -709,6 +988,58 @@ code {
   min-width: 12rem;
 }
 
+.marks-entry-policy-row {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.marks-entry-policy-row--disabled {
+  opacity: 0.65;
+}
+
+.marks-entry-toggle-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.marks-entry-toggle-label input {
+  margin-top: 2px;
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--maroon);
+  cursor: pointer;
+}
+
+.marks-entry-toggle-hint {
+  margin: 8px 0 0 1.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.marks-entry-lock-banner {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: #fff8e6;
+  border: 1px solid #e65100;
+  border-radius: 8px;
+  color: #5d3600;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .marks-share-top-btn {
   flex: 0 0 auto;
   align-self: flex-start;
@@ -756,6 +1087,32 @@ code {
   gap: 12px;
 }
 
+/* Match teacher marks page: cancel stays visible while scrolling the roll list */
+.marks-cancel-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 4px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 4px 0 6px;
+  background: linear-gradient(to bottom, var(--surface) 70%, transparent);
+}
+
+.btn.marks-btn-cancel-edit {
+  padding: 5px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #b71c1c;
+  background: #fff;
+  border: 1px solid #e57373;
+  border-radius: 6px;
+}
+
+.btn.marks-btn-cancel-edit:hover {
+  background: #ffebee;
+}
+
 .marks-meta-grid--compact {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
@@ -785,6 +1142,31 @@ code {
   width: 1%;
 }
 
+/* Photo preview only: Queries → Student detail, profile modal, custom report modal */
+.query-photo-modal-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.query-photo-detail-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.query-photo-detail {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
 .marks-actions {
   margin-top: 8px;
 }
@@ -792,6 +1174,29 @@ code {
 .marks-actions.btn-row {
   flex-wrap: wrap;
   align-items: center;
+}
+
+.attendance-mark-panel {
+  margin-top: 10px;
+}
+
+.attendance-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.attendance-status-select {
+  min-width: 120px;
+  font-weight: 700;
+}
+
+.attendance-status-select.status-present {
+  color: var(--green);
+}
+
+.attendance-status-select.status-absent {
+  color: var(--danger);
 }
 
 .sheets-link-grid {
@@ -942,4 +1347,159 @@ code {
     width: 100%;
     text-align: center;
   }
+}
+
+/* Consolidated mark-slip generator */
+.consolidated-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.consolidated-exam-field {
+  min-width: 200px;
+  margin: 0;
+}
+
+.consolidated-hint {
+  margin-top: 12px;
+  color: var(--muted);
+}
+
+.kv-consolidated-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1003;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.kv-consolidated-modal[hidden] {
+  display: none !important;
+}
+
+.kv-consolidated-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.kv-consolidated-panel {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  max-width: min(520px, 100vw - 32px);
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+}
+
+.kv-consolidated-panel--wide {
+  max-width: min(720px, 100vw - 32px);
+}
+
+.consolidated-status-source {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.consolidated-status-table-wrap {
+  max-height: min(50vh, 360px);
+  margin: 8px 0 4px;
+}
+
+.consolidated-status-missing {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.consolidated-status-slipid {
+  font-size: 0.78rem;
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+}
+
+.consolidated-absent-body {
+  max-height: min(55vh, 420px);
+  overflow-y: auto;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.consolidated-absent-block {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated, var(--surface));
+}
+
+.consolidated-absent-subject {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--maroon);
+}
+
+.consolidated-absent-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.consolidated-absent-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.consolidated-absent-list li {
+  margin: 0 0 4px;
+}
+
+.kv-consolidated-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: var(--maroon);
+}
+
+.kv-consolidated-hints {
+  margin: 0 0 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.consolidated-hint-line {
+  margin: 0 0 8px;
+}
+
+.kv-consolidated-form .field {
+  margin-bottom: 12px;
+}
+
+.consolidated-examiner-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.consolidated-dynamic-field span {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.kv-consolidated-actions {
+  margin-top: 16px;
+  justify-content: flex-end;
 }

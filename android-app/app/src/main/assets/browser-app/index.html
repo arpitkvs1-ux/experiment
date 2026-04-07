@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Student dashboard</title>
+    <title>Vaayu</title>
+    <link rel="icon" type="image/png" href="vaayu-logo.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -11,12 +12,14 @@
       <aside class="sidebar" aria-label="Main navigation">
         <div class="sidebar-brand" id="appBrandSchool">School name</div>
         <p class="sidebar-class-line" id="appBrandClass" hidden></p>
-        <p class="sidebar-tagline">Offline dashboard</p>
         <nav class="sidebar-nav" role="navigation">
           <button type="button" class="nav-item active" data-nav="home">Home</button>
           <button type="button" class="nav-item" data-nav="queries">Queries</button>
           <button type="button" class="nav-item" data-nav="reports">Reports</button>
           <button type="button" class="nav-item" data-nav="marks">Marks</button>
+          <button type="button" class="nav-item" data-nav="attendance">Attendance</button>
+          <button type="button" class="nav-item" data-nav="timetable">Time table</button>
+          <button type="button" class="nav-item" data-nav="consolidated">Consolidated sheets</button>
           <button type="button" class="nav-item" data-nav="students">Students</button>
           <button type="button" class="nav-item" data-nav="settings">Settings</button>
           <button type="button" class="nav-item" data-nav="setup">Setup guide</button>
@@ -24,34 +27,52 @@
       </aside>
 
       <div class="main-column">
-        <header class="top-bar top-bar--compact">
-          <div>
-            <p class="top-bar-school-line" id="appTopBarSchool"></p>
-            <h1 class="brand">Student dashboard</h1>
-            <p class="tagline">Runs in your browser · Data saved in localStorage · No Node.js</p>
+        <header class="top-bar top-bar--compact top-bar--dashboard">
+          <div class="top-bar-dashboard-inner">
+            <div class="top-bar-center-block">
+              <p class="top-bar-app-name">Vaayu</p>
+              <p class="top-bar-school-line" id="appTopBarSchool"></p>
+            </div>
+            <img src="vaayu-logo.png" alt="" class="app-top-logo" />
           </div>
         </header>
 
         <main class="main-area">
           <section id="view-home" class="app-view" data-view="home">
             <div class="card">
-              <h2 class="card-title">Welcome</h2>
-              <p class="card-desc">
-                Use the menu to run queries, build reports, enter marks, or manage student records. Outputs (Excel / PDF) are unchanged.
-              </p>
+              <div class="card-head-row">
+                <h2 class="card-title">Welcome</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-home"
+                  data-instr-title="Using this dashboard"
+                >
+                  Instructions
+                </button>
+              </div>
               <p class="home-stat">
                 <span id="homeRecordCount">0</span> <span class="home-stat-label">students in your local database</span>
               </p>
-              <p class="card-desc small">
-                Your class list syncs from the Google Sheet <strong>Master</strong> tab while the app is open (and when you come back to it). Column names should match that sheet (e.g. <code>Student Name</code>, <code>house</code>).
-              </p>
+              <div class="btn-row home-sync-row">
+                <button type="button" class="btn primary" id="btnHomeSyncSheets">Sync with Google Sheets</button>
+              </div>
             </div>
           </section>
 
           <section id="view-queries" class="app-view" data-view="queries" hidden>
             <div class="card">
-              <h2 class="card-title">Queries</h2>
-              <p class="card-desc small">Same rules as the sheet dashboard for filters; lookups and lists use your current local data.</p>
+              <div class="card-head-row">
+                <h2 class="card-title">Queries</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-queries"
+                  data-instr-title="Queries"
+                >
+                  Instructions
+                </button>
+              </div>
               <div class="subtabs query-subtabs" role="tablist" aria-label="Query type">
                 <button type="button" class="query-tab active" data-query-tab="dash" role="tab" aria-selected="true">Dashboard filter</button>
                 <button type="button" class="query-tab" data-query-tab="lookup" role="tab" aria-selected="false">Student &amp; column</button>
@@ -61,7 +82,6 @@
 
               <div id="query-panel-dash" class="query-panel" role="tabpanel">
                 <h3 class="query-panel-title">Dashboard filter</h3>
-                <p class="card-desc small">QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY.</p>
                 <div class="row">
                   <label class="field">
                     <span>Category</span>
@@ -121,8 +141,17 @@
 
           <section id="view-reports" class="app-view" data-view="reports" hidden>
             <div class="card">
-              <h2 class="card-title">Summaries</h2>
-              <p class="card-desc small">Counts from your current data.</p>
+              <div class="card-head-row">
+                <h2 class="card-title">Summaries</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-reports"
+                  data-instr-title="Reports"
+                >
+                  Instructions
+                </button>
+              </div>
               <div class="btn-row">
                 <button type="button" class="btn purple" id="btnSumCat">Category summary</button>
                 <button type="button" class="btn orange" id="btnSumAdm">Admission category summary</button>
@@ -142,23 +171,68 @@
             </div>
           </section>
 
+          <section id="view-consolidated" class="app-view" data-view="consolidated" hidden>
+            <div class="card">
+              <div class="card-head-row">
+                <h2 class="card-title">Generate consolidated sheets</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-consolidated"
+                  data-instr-title="Consolidated mark sheets"
+                >
+                  Instructions
+                </button>
+              </div>
+              <div class="consolidated-toolbar">
+                <label class="field consolidated-exam-field">
+                  <span>Examination</span>
+                  <select id="consolidatedExamSelect" aria-label="Examination">
+                    <option value="PT1">PT1</option>
+                    <option value="PT2">PT2</option>
+                    <option value="Half Yearly">Half Yearly</option>
+                    <option value="SEE">SEE</option>
+                  </select>
+                </label>
+                <button type="button" class="btn primary" id="btnConsolidatedFetch">Fetch</button>
+                <button type="button" class="btn outline" id="btnConsolidatedStatus">Status</button>
+                <button type="button" class="btn outline" id="btnConsolidatedAbsent">Absent</button>
+              </div>
+              <p class="card-desc small consolidated-hint" id="consolidatedFetchHint" hidden></p>
+            </div>
+          </section>
+
           <section id="view-marks" class="app-view" data-view="marks" hidden>
             <div id="marksEntryPanel" class="marks-entry-panel">
               <section class="card" id="marksEntrySection">
                 <div class="marks-card-head">
                   <h2 class="card-title">Examination marks</h2>
-                  <button type="button" class="btn outline sm marks-share-top-btn" id="btnMarksCopyTeacherLink" title="Share with teachers">
-                    Copy teacher marks link
-                  </button>
+                  <div class="marks-card-actions">
+                    <button
+                      type="button"
+                      class="btn outline sm js-instructions-open"
+                      data-instr-template="instr-tpl-marks"
+                      data-instr-title="Examination marks"
+                    >
+                      Instructions
+                    </button>
+                    <button type="button" class="btn outline sm marks-share-top-btn" id="btnMarksCopyTeacherLink" title="Share with teachers">
+                      Copy teacher marks link
+                    </button>
+                  </div>
                 </div>
-                <p class="card-desc small">
-                  Choose <strong>examination</strong> and <strong>subject</strong> first. If no slip exists yet, the entry form appears below; if marks are already on file, use <strong>Edit marks</strong> to open the form.
-                  Use <strong>Enter</strong> / <strong>↓</strong> / <strong>↑</strong> between marks cells. <strong>a</strong> / <strong>ab</strong> / <strong>AB</strong> count as absent.
-                  <strong>Submit</strong> saves and syncs to Sheets; <strong>Download mark slip</strong> uses the same layout as before.
-                </p>
-                <p class="card-desc small">
-                  Marks sync from Sheets when you open this page or after each Submit. <strong>Copy teacher marks link</strong> copies only the teacher page URL to the clipboard (teachers open it and pick examination and subject).
-                </p>
+
+                <div class="marks-entry-policy-row" id="marksEntryToggleRow">
+                  <label class="marks-entry-toggle-label">
+                    <input type="checkbox" id="marksEntryToggle" checked aria-describedby="marksEntryToggleHint" />
+                    <span>Allow marks entry and edit (this app and teacher web page)</span>
+                  </label>
+                  <p class="marks-entry-toggle-hint" id="marksEntryToggleHint">
+                    When off, nobody can enter or edit marks here or on the teacher page until you turn this on again. Downloading slips still works.
+                  </p>
+                </div>
+
+                <p id="marksEntryLockBanner" class="marks-entry-lock-banner" hidden role="status"></p>
 
                 <div class="marks-picker-grid">
                   <label class="field">
@@ -190,7 +264,9 @@
                 <div id="marksDynamicArea" class="marks-dynamic-area" hidden>
                   <p class="marks-picker-status" id="marksPickerStatus"></p>
                   <div id="marksNewEntrySection" class="marks-new-entry-section" hidden>
-                  <button type="button" class="btn outline sm" id="btnMarksCancelEdit" hidden>Cancel edit</button>
+                  <div class="marks-cancel-row">
+                    <button type="button" class="btn marks-btn-cancel-edit sm" id="btnMarksCancelEdit" hidden>Cancel edit</button>
+                  </div>
                   <div class="marks-meta-grid marks-meta-grid--compact">
                     <label class="field">
                       <span>Maximum marks</span>
@@ -219,6 +295,7 @@
                     </table>
                   </div>
                   <div class="marks-actions btn-row">
+                    <button type="button" class="btn marks-btn-cancel-edit sm" id="btnMarksCancelEditFooter" hidden>Cancel edit</button>
                     <button type="button" class="btn success" id="btnMarksSubmit">Submit</button>
                   </div>
                   </div>
@@ -227,9 +304,81 @@
             </div>
           </section>
 
+          <section id="view-attendance" class="app-view" data-view="attendance" hidden>
+            <div class="card">
+              <div class="card-head-row">
+                <h2 class="card-title">Attendance</h2>
+                <div class="btn-row">
+                  <button
+                    type="button"
+                    class="btn outline sm js-instructions-open"
+                    data-instr-template="instr-tpl-attendance"
+                    data-instr-title="Attendance"
+                  >
+                    Instructions
+                  </button>
+                  <button type="button" class="btn outline sm" id="btnAttendanceMonthlyReport">Monthly attendance report</button>
+                </div>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn primary" id="btnAttendanceMarkToday">Mark today attendance</button>
+                <button type="button" class="btn outline" id="btnAttendanceAbsentees" hidden>See today absentee list</button>
+                <button type="button" class="btn outline" id="btnAttendanceSummary" hidden>Today's attendance summary</button>
+              </div>
+              <p class="card-desc small" id="attendanceStatusLine">Status: idle.</p>
+              <div id="attendanceMarkPanel" class="attendance-mark-panel" hidden>
+                <div class="attendance-table-wrap">
+                  <table class="data-table compact marks-roll-table" id="attendanceStudentTable">
+                    <thead>
+                      <tr>
+                        <th>Roll No.</th>
+                        <th>Student name</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="attendanceStudentTbody"></tbody>
+                  </table>
+                </div>
+                <div class="btn-row">
+                  <button type="button" class="btn success" id="btnAttendanceSubmit">Submit</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-timetable" class="app-view" data-view="timetable" hidden>
+            <div class="card">
+              <div class="card-head-row">
+                <h2 class="card-title">Time table</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-timetable"
+                  data-instr-title="Time table"
+                >
+                  Instructions
+                </button>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn primary" id="btnTimetableClass">Class time table</button>
+                <button type="button" class="btn outline" id="btnTimetableTeacher">Teacher time table</button>
+              </div>
+            </div>
+          </section>
+
           <section id="view-students" class="app-view" data-view="students" hidden>
             <section class="card">
-              <h2 class="card-title">Master database</h2>
+              <div class="card-head-row">
+                <h2 class="card-title">Master database</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-students"
+                  data-instr-title="Master database"
+                >
+                  Instructions
+                </button>
+              </div>
               <div class="tabs">
                 <button type="button" class="tab active" data-tab="list">Records (<span id="recordCount">0</span>)</button>
                 <button type="button" class="tab" data-tab="add">Add student</button>
@@ -252,7 +401,6 @@
               </div>
               <div id="panelAdd" hidden>
                 <form id="formAdd" class="add-form">
-                  <p class="card-desc small">Required: <strong>Student Name</strong>. Other fields optional.</p>
                   <div class="form-grid" id="addFormGrid"></div>
                   <button type="submit" class="btn success">Add to database</button>
                 </form>
@@ -261,75 +409,35 @@
           </section>
 
           <section id="view-setup" class="app-view" data-view="setup" hidden>
-            <div class="card setup-guide-card">
-              <h2 class="card-title">Setup guide</h2>
-              <p class="card-desc small">
-                First-time setup for this project: Google Sheet, Apps Script, web app URL, and branding. Keep this page in sync when the process changes (edit
-                <code>index.html</code> in the <code>browser-app</code> folder, section <code>view-setup</code>).
-              </p>
-              <ol class="setup-steps">
-                <li>
-                  <h3 class="setup-step-title">Create the Google Sheet</h3>
-                  <p>Create a new Google Spreadsheet. Add two tabs named exactly <strong>Master</strong> and <strong>Marks</strong> (capital M).</p>
-                  <p>
-                    On <strong>Master</strong>, row 1 must be your student column headers — same names you use in CSV / this app (e.g.
-                    <code>R.NO.</code>, <code>Student Name</code>, <code>house</code>, …). Data starts row 2. The app syncs this tab into local storage.
-                  </p>
-                  <p>
-                    The <strong>Marks</strong> tab is filled by the Apps Script backend (slip rows). You do not need to create headers by hand; the script can
-                    create them on first save. Optional: leave the tab empty until you deploy.
-                  </p>
-                </li>
-                <li>
-                  <h3 class="setup-step-title">Apps Script project</h3>
-                  <p>In the spreadsheet: <strong>Extensions → Apps Script</strong>. Add these files from the repo folder <code>google-apps-script/</code>:</p>
-                  <ul>
-                    <li><code>Code.gs</code> — main API (<code>doPost</code>, <code>doGet</code>, marks CRUD, students read).</li>
-                    <li><code>TeacherMarks.html</code> — teacher marks UI (<code>?teacher=1</code>).</li>
-                    <li><code>TeacherMarksPdfInclude.html</code> — PDF helper included from the teacher page.</li>
-                  </ul>
-                  <p>
-                    In <code>Code.gs</code>, set <code>CONFIG.SPREADSHEET_ID</code> to your workbook ID (from the Sheet URL). Set
-                    <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> to match the dashboard (see step 5).
-                  </p>
-                </li>
-                <li>
-                  <h3 class="setup-step-title">Deploy the web app</h3>
-                  <p><strong>Deploy → New deployment</strong> → type <strong>Web app</strong>. Execute as: <strong>Me</strong>. Who has access: <strong>Anyone</strong> (or your org policy).</p>
-                  <p>Copy the deployment URL — it must end with <code>/exec</code>.</p>
-                  <p>Teachers open the same URL with <code>?teacher=1</code> (the teacher page lets them pick exam and subject).</p>
-                </li>
-                <li>
-                  <h3 class="setup-step-title">Point the dashboard at the web app</h3>
-                  <p>
-                    In <code>browser-app/sheets-webapp-config.js</code>, set <code>window.KV_SHEETS_WEB_APP_URL</code> to that <code>/exec</code> URL (no extra
-                    query string). This file is the single source for the browser app; the Android build copies <code>browser-app</code> via Gradle — do not maintain a second copy by hand.
-                  </p>
-                  <p>Reload the dashboard. Open <strong>Marks</strong> — slips should list from Sheets after sync.</p>
-                </li>
-                <li>
-                  <h3 class="setup-step-title">School name and class (branding)</h3>
-                  <p>
-                    In <code>sheets-webapp-config.js</code>, set <code>KV_SCHOOL_NAME</code> and <code>KV_SCHOOL_CLASS</code>. Use <code>"—"</code> or
-                    <code>""</code> for class to hide the class line where supported.
-                  </p>
-                  <p>Set the same values in Apps Script <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> so the teacher page and PDF slips match.</p>
-                </li>
-                <li>
-                  <h3 class="setup-step-title">After code changes</h3>
-                  <p><strong>Apps Script:</strong> Save, then <strong>Deploy → Manage deployments</strong> → edit → <strong>New version</strong> → Deploy.</p>
-                  <p><strong>Dashboard:</strong> Refresh the browser (hard refresh if cached). <strong>Android:</strong> Run Gradle <code>copyBrowserApp</code> / rebuild if you changed <code>browser-app</code>.</p>
-                </li>
-              </ol>
+            <div class="card">
+              <div class="card-head-row">
+                <h2 class="card-title">Setup guide</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-setup"
+                  data-instr-title="Setup guide"
+                  data-instr-wide="1"
+                >
+                  Instructions
+                </button>
+              </div>
             </div>
           </section>
 
           <section id="view-settings" class="app-view" data-view="settings" hidden>
             <div class="card">
-              <h2 class="card-title">Data &amp; import / export</h2>
-              <p class="card-desc small">
-                Students load from the <strong>Master</strong> tab automatically. Use <strong>Import CSV</strong> only if you need a one-off backup or offline copy.
-              </p>
+              <div class="card-head-row">
+                <h2 class="card-title">Data &amp; import / export</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-settings"
+                  data-instr-title="Data &amp; import / export"
+                >
+                  Instructions
+                </button>
+              </div>
               <div class="settings-actions btn-row">
                 <label class="btn outline" style="display: inline-block; margin: 0">
                   <input type="file" id="fileImport" accept=".csv,text/csv" style="display: none" />
@@ -344,15 +452,310 @@
       </div>
     </div>
 
+    <template id="instr-tpl-home">
+      <ul class="app-instr-list">
+        <li>Use the sidebar for <strong>Home</strong>, <strong>Queries</strong>, <strong>Reports</strong>, <strong>Marks</strong>, <strong>Consolidated sheets</strong>, <strong>Students</strong>, <strong>Settings</strong>, and the <strong>Setup guide</strong>.</li>
+        <li>Query and report outputs (Excel / PDF) work from the same actions as before.</li>
+        <li>
+          <strong>Sync with Google Sheets</strong> on Home pulls the <strong>Master</strong> tab (students) and the marks slip list from your deployed web app. The same pull runs when you open the app, when the device goes back online, and periodically while you use the dashboard (not on the Setup guide screen) so edits by others appear automatically. Column names should match the sheet (e.g.
+          <code>Student Name</code>, <code>house</code>). Interval: <code>KV_SHEETS_FOREGROUND_POLL_MS</code> in <code>sheets-webapp-config.js</code> (default 45s; set <code>-1</code> or <code>false</code> to turn off auto-refresh).
+        </li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-queries">
+      <ul class="app-instr-list">
+        <li>Filters follow the same rules as the sheet dashboard; all lookups use your <strong>current local data</strong>.</li>
+        <li>
+          <strong>Dashboard filter</strong> — pick a category (QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY), then a sub category, and <strong>Show list</strong>.
+        </li>
+        <li><strong>Student &amp; column</strong> — choose a student and a column to see that field’s value.</li>
+        <li><strong>List by field</strong> — pick a header and value to list matching students.</li>
+        <li><strong>Profile</strong> — choose a student for a full profile-style view.</li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-reports">
+      <ul class="app-instr-list">
+        <li><strong>Summaries</strong> — counts are built from your <strong>current</strong> student data (category and admission category).</li>
+        <li>
+          <strong>Custom report</strong> — tick the columns you need, then <strong>Show report</strong>. Use <strong>Download Excel</strong> or <strong>Download PDF</strong> for the
+          selected columns.
+        </li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-attendance">
+      <ul class="app-instr-list">
+        <li><strong>Mark today attendance</strong> shows roll, name, and status (Present/Absent), then submit to write P/A in Attendance sheet.</li>
+        <li>If attendance is already marked for today, app asks whether you want to modify it.</li>
+        <li><strong>See today absentee list</strong> shows today's absentees in a modal popup.</li>
+        <li><strong>Today's attendance summary</strong> shows girls/boys/total for total, present, and absent.</li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-timetable">
+      <ul class="app-instr-list">
+        <li>
+          <strong>Class time table</strong> shows <strong>today’s</strong> schedule (Asia/Kolkata) from <strong>Timetable_Class</strong> and <strong>Timetable_Slots</strong>, for the class set in <code>KV_SCHOOL_CLASS</code>.
+        </li>
+        <li>
+          <strong>Teacher time table</strong> shows today’s schedule for <strong>Arpit Choudhary, TGT(WE)</strong> from <strong>Timetable_Teacher</strong> (column A must match <code>TGT WE</code> in Apps Script <code>CONFIG</code>, or change the config to your code). Period cells: two lines (class then subject) or <code>Class / Subject</code>.
+        </li>
+        <li>
+          Create and maintain the three tabs yourself in the Google workbook; the app only reads them. Today’s class and teacher timetables are prefetched after sync and cached for the day (session) so buttons open quickly.
+        </li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-marks">
+      <ul class="app-instr-list">
+        <li>Select <strong>Examination</strong>, then <strong>Subject</strong>.</li>
+        <li>
+          If a slip already exists, use <strong>Edit marks</strong> or <strong>Download mark slip</strong>. If not, fill maximum marks, teacher name, and exam date, enter marks, then
+          <strong>Submit</strong>.
+        </li>
+        <li>Use <strong>Enter</strong> or <strong>↑</strong> / <strong>↓</strong> between mark cells. <strong>AB</strong> (any case) counts as absent; invalid values show a message and the cell is cleared when you leave it or try to move to another cell.</li>
+        <li><strong>Submit</strong> saves and syncs to Google Sheets; <strong>Download mark slip</strong> keeps the same layout as before.</li>
+        <li>Marks data refreshes from Sheets when you open the app, use <strong>Sync with Google Sheets</strong>, go back online, from periodic refresh while you use the app (except Setup), or after each successful <strong>Submit</strong>. While you are entering marks, sync does not reset the table.</li>
+        <li><strong>Copy teacher marks link</strong> copies only the teacher page URL; teachers open it and pick examination and subject themselves.</li>
+        <li>
+          Use <strong>Allow marks entry and edit</strong> to lock or unlock marks entry on <strong>both</strong> this app and the teacher web page. Downloading existing slips stays available when locked.
+        </li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-consolidated">
+      <ul class="app-instr-list">
+        <li>Choose an <strong>examination</strong> (PT1, PT2, Half Yearly, SEE). <strong>Fetch</strong> reads marks from your <strong>local database</strong> (same slips as the Marks screen — sync from Google Sheets first if needed).</li>
+        <li><strong>Status</strong> calls your Google Apps Script web app and loads the <strong>Marks</strong> sheet (<code>listMarkSlips</code>). A table shows each subject as <strong>Entered</strong> or <strong>Not entered</strong> for that exam, with teacher and last-saved time when available.</li>
+        <li><strong>Absent</strong> uses the same sheet: for each subject it loads the slip (<code>getMarkSlip</code>) and lists students marked <strong>AB</strong>. If there is no slip or marks are not on the sheet for that subject, it shows <strong>Marks not entered for this subject</strong>.</li>
+        <li>After <strong>Fetch</strong>, a dialog lists missing local data. You can type values or <strong>leave fields blank</strong> to show “—” in the Excel file.</li>
+        <li>The downloaded workbook has one sheet per subject plus <strong>Result Analysis</strong> with totals, overall % bands, and strength / appeared counts.</li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-students">
+      <ul class="app-instr-list">
+        <li><strong>Records</strong> — browse and delete rows from your local master list (synced from <strong>Master</strong> when Sheets is connected).</li>
+        <li><strong>Add student</strong> — <strong>Student Name</strong> is required; other fields are optional.</li>
+        <li>
+          Optional <strong>Photo</strong> column (before <strong>REMARK</strong> in the sheet): shown as an image only in <strong>Queries → Student detail</strong> (when you pick the Photo column), <strong>Student profile</strong>, and <strong>Custom report</strong> when that column is included.
+        </li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-settings">
+      <ul class="app-instr-list">
+        <li>Students load from the <strong>Master</strong> tab when you open the app, tap <strong>Sync with Google Sheets</strong>, go back online, or from automatic foreground refresh (every <code>KV_SHEETS_FOREGROUND_POLL_MS</code> while you use the app, except on Setup) — if the web app URL is configured and the sheet is reachable.</li>
+        <li><strong>Import CSV</strong> — use for a one-off restore or offline copy; column headers should match your master sheet.</li>
+        <li><strong>Export all (Excel)</strong> — downloads the current local database.</li>
+        <li><strong>Clear data</strong> — removes local student data (confirm before proceeding).</li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-setup">
+      <div class="setup-guide-card--modal">
+        <ol class="setup-steps">
+          <li>
+            <h3 class="setup-step-title">Create the Google Sheet</h3>
+            <p>Create a new Google Spreadsheet. Add two tabs named exactly <strong>Master</strong> and <strong>Marks</strong> (capital M).</p>
+            <p>
+              On <strong>Master</strong>, row 1 must be your student column headers — same names you use in CSV / this app (e.g.
+              <code>R.NO.</code>, <code>Student Name</code>, <code>house</code>, …). Data starts row 2. The app syncs this tab into local storage.
+            </p>
+            <p>
+              The <strong>Marks</strong> tab is filled by the Apps Script backend (slip rows). You do not need to create headers by hand; the script can create them on first save.
+              Optional: leave the tab empty until you deploy.
+            </p>
+          </li>
+          <li>
+            <h3 class="setup-step-title">Apps Script project</h3>
+            <p>In the spreadsheet: <strong>Extensions → Apps Script</strong>. Add these files from the repo folder <code>google-apps-script/</code>:</p>
+            <ul>
+              <li><code>Code.gs</code> — main API (<code>doPost</code>, <code>doGet</code>, marks CRUD, students read).</li>
+              <li><code>TeacherMarks.html</code> — teacher marks UI (<code>?teacher=1</code>).</li>
+              <li><code>TeacherMarksPdfInclude.html</code> — PDF helper included from the teacher page.</li>
+            </ul>
+            <p>
+              In <code>Code.gs</code>, set <code>CONFIG.SPREADSHEET_ID</code> to your workbook ID (from the Sheet URL). Set
+              <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> to match the dashboard (see step 5).
+            </p>
+          </li>
+          <li>
+            <h3 class="setup-step-title">Deploy the web app</h3>
+            <p><strong>Deploy → New deployment</strong> → type <strong>Web app</strong>. Execute as: <strong>Me</strong>. Who has access: <strong>Anyone</strong> (or your org policy).</p>
+            <p>Copy the deployment URL — it must end with <code>/exec</code>.</p>
+            <p>Teachers open the same URL with <code>?teacher=1</code> (the teacher page lets them pick exam and subject).</p>
+          </li>
+          <li>
+            <h3 class="setup-step-title">Point the dashboard at the web app</h3>
+            <p>
+              In <code>browser-app/sheets-webapp-config.js</code>, set <code>window.KV_SHEETS_WEB_APP_URL</code> to that <code>/exec</code> URL (no extra query string). This file is
+              the single source for the browser app; the Android build copies <code>browser-app</code> via Gradle — do not maintain a second copy by hand.
+            </p>
+            <p>Reload the dashboard. Open <strong>Marks</strong> — slips should list from Sheets after sync.</p>
+          </li>
+          <li>
+            <h3 class="setup-step-title">School name and class (branding)</h3>
+            <p>
+              In <code>sheets-webapp-config.js</code>, set <code>KV_SCHOOL_NAME</code> and <code>KV_SCHOOL_CLASS</code>. Use <code>"—"</code> or <code>""</code> for class to hide the
+              class line where supported.
+            </p>
+            <p>Set the same values in Apps Script <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> so the teacher page and PDF slips match.</p>
+          </li>
+          <li>
+            <h3 class="setup-step-title">After code changes</h3>
+            <p><strong>Apps Script:</strong> Save, then <strong>Deploy → Manage deployments</strong> → edit → <strong>New version</strong> → Deploy.</p>
+            <p><strong>Dashboard:</strong> Refresh the browser (hard refresh if cached). <strong>Android:</strong> Run Gradle <code>copyBrowserApp</code> / rebuild if you changed <code>browser-app</code>.</p>
+          </li>
+        </ol>
+      </div>
+    </template>
+
+    <div id="appInstructionsModal" class="app-instr-modal" hidden aria-hidden="true">
+      <div class="app-instr-modal-backdrop" id="appInstrBackdrop" aria-hidden="true"></div>
+      <div
+        class="app-instr-modal-panel"
+        id="appInstrPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="appInstrTitle"
+      >
+        <div class="modal-panel-head">
+          <h2 id="appInstrTitle">Instructions</h2>
+          <span class="panel-generated-by">Generated by Vaayu App</span>
+        </div>
+        <div id="appInstrBody"></div>
+        <div class="app-instr-modal-footer">
+          <button type="button" class="btn primary" id="appInstrClose">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="kvConsolidatedStatusModal" class="kv-consolidated-modal" hidden aria-hidden="true">
+      <div class="kv-consolidated-backdrop" id="kvConsolidatedStatusBackdrop" aria-hidden="true"></div>
+      <div class="kv-consolidated-panel kv-consolidated-panel--wide" role="dialog" aria-modal="true" aria-labelledby="kvConsolidatedStatusTitle">
+        <div class="kv-panel-head-row">
+          <h2 id="kvConsolidatedStatusTitle" class="kv-consolidated-title">Marks entry status</h2>
+          <span class="panel-generated-by">Generated by Vaayu App</span>
+        </div>
+        <p class="card-desc small" id="kvConsolidatedStatusExamLine"></p>
+        <p class="card-desc small consolidated-status-source">Source: <strong>Marks</strong> sheet in Google Sheets (<code>listMarkSlips</code>).</p>
+        <div class="table-scroll consolidated-status-table-wrap">
+          <table class="data-table compact" id="consolidatedStatusTable">
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Status</th>
+                <th>Teacher</th>
+                <th>Last saved</th>
+                <th>Slip ID</th>
+              </tr>
+            </thead>
+            <tbody id="consolidatedStatusTbody"></tbody>
+          </table>
+        </div>
+        <div class="kv-consolidated-actions btn-row">
+          <button type="button" class="btn primary" id="consolidatedStatusBtnClose">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="kvConsolidatedAbsentModal" class="kv-consolidated-modal" hidden aria-hidden="true">
+      <div class="kv-consolidated-backdrop" id="kvConsolidatedAbsentBackdrop" aria-hidden="true"></div>
+      <div class="kv-consolidated-panel kv-consolidated-panel--wide" role="dialog" aria-modal="true" aria-labelledby="kvConsolidatedAbsentTitle">
+        <div class="kv-panel-head-row">
+          <h2 id="kvConsolidatedAbsentTitle" class="kv-consolidated-title">Absent (by subject)</h2>
+          <span class="panel-generated-by">Generated by Vaayu App</span>
+        </div>
+        <p class="card-desc small" id="kvConsolidatedAbsentExamLine"></p>
+        <p class="card-desc small consolidated-status-source">
+          Source: <strong>Marks</strong> sheet — <code>listMarkSlips</code> + <code>getMarkSlip</code> (students with mark <strong>AB</strong>).
+        </p>
+        <div class="consolidated-absent-body" id="consolidatedAbsentBody"></div>
+        <div class="kv-consolidated-actions btn-row">
+          <button type="button" class="btn primary" id="consolidatedAbsentBtnClose">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="kvConsolidatedModal" class="kv-consolidated-modal" hidden aria-hidden="true">
+      <div class="kv-consolidated-backdrop" id="kvConsolidatedBackdrop" aria-hidden="true"></div>
+      <div class="kv-consolidated-panel" role="dialog" aria-modal="true" aria-labelledby="kvConsolidatedTitle">
+        <div class="kv-panel-head-row">
+          <h2 id="kvConsolidatedTitle" class="kv-consolidated-title">Consolidated workbook</h2>
+          <span class="panel-generated-by">Generated by Vaayu App</span>
+        </div>
+        <p class="card-desc small" id="kvConsolidatedExamLine"></p>
+        <div id="kvConsolidatedHints" class="kv-consolidated-hints"></div>
+        <div class="kv-consolidated-form">
+          <label class="field">
+            <span>Academic session</span>
+            <input type="text" id="consolidatedInputSession" autocomplete="off" placeholder="e.g. 2025-26" />
+          </label>
+          <label class="field">
+            <span>PTM / meeting date (optional)</span>
+            <input type="text" id="consolidatedInputPtm" autocomplete="off" placeholder="Leave blank to omit" />
+          </label>
+          <div id="consolidatedExaminerFields" class="consolidated-examiner-fields"></div>
+        </div>
+        <div class="kv-consolidated-actions btn-row">
+          <button type="button" class="btn outline" id="consolidatedBtnCancel">Cancel</button>
+          <button type="button" class="btn primary" id="consolidatedBtnGenerate">Generate &amp; download</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="kvOkDialog" class="kv-ok-dialog" hidden aria-hidden="true">
+      <div class="kv-ok-dialog-backdrop" aria-hidden="true"></div>
+      <div class="kv-ok-dialog-panel kv-ok-dialog-panel--confirm" role="alertdialog" aria-modal="true" aria-labelledby="kvOkDialogMsg">
+        <p id="kvOkDialogMsg" class="kv-ok-dialog-msg"></p>
+        <button type="button" class="btn primary" id="kvOkDialogBtn">OK</button>
+      </div>
+    </div>
+
+    <div id="attendanceBacklogDialog" class="kv-ok-dialog" hidden aria-hidden="true">
+      <div class="kv-ok-dialog-backdrop" id="attendanceBacklogBackdrop" aria-hidden="true"></div>
+      <div class="kv-ok-dialog-panel kv-ok-dialog-panel--feature" role="dialog" aria-modal="true" aria-labelledby="attendanceBacklogMsg">
+        <div class="kv-dialog-brand-row"><span class="panel-generated-by">Generated by Vaayu App</span></div>
+        <p id="attendanceBacklogMsg" class="kv-ok-dialog-msg"></p>
+        <div class="btn-row">
+          <button type="button" class="btn outline" id="attendanceBacklogHoliday">Mark it a holiday</button>
+          <button type="button" class="btn primary" id="attendanceBacklogFill">Fill it</button>
+          <button type="button" class="btn danger" id="attendanceBacklogIgnore">Ignore it</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="attendanceMonthlyDialog" class="kv-ok-dialog" hidden aria-hidden="true">
+      <div class="kv-ok-dialog-backdrop" id="attendanceMonthlyBackdrop" aria-hidden="true"></div>
+      <div class="kv-ok-dialog-panel kv-ok-dialog-panel--feature" role="dialog" aria-modal="true" aria-labelledby="attendanceMonthlyTitle">
+        <div class="kv-dialog-brand-row"><span class="panel-generated-by">Generated by Vaayu App</span></div>
+        <p id="attendanceMonthlyTitle" class="kv-ok-dialog-msg">Monthly attendance report</p>
+        <label class="field">
+          <span>Select month</span>
+          <select id="attendanceMonthlySelect"></select>
+        </label>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="attendanceMonthlyGo">Go</button>
+          <button type="button" class="btn outline" id="attendanceMonthlyClose">Close</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" id="modalBackdrop" hidden>
       <div class="report-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <header class="report-header">
-          <div>
+          <div class="report-header-main">
             <div class="school-name" id="modalSchoolName">School name</div>
             <h2 class="report-title" id="modalTitle"></h2>
+            <p class="report-subtitle" id="modalSubtitle" hidden></p>
           </div>
+          <span class="panel-generated-by report-header-brand" aria-hidden="true">Generated by Vaayu App</span>
           <button type="button" class="btn ghost" id="modalClose" aria-label="Close">×</button>
         </header>
+        <div class="report-summary-grid" id="modalSummaryGrid" hidden></div>
         <div class="table-wrap">
           <table class="data-table" id="modalTable">
             <thead><tr></tr></thead>
@@ -370,7 +773,9 @@
     <script src="vendor/jspdf.plugin.autotable.min.js"></script>
     <script src="vendor/xlsx.full.min.js"></script>
     <script src="sheets-webapp-config.js"></script>
+    <script src="kv-message-dialog.js"></script>
     <script src="export-reports.js"></script>
+    <script src="consolidated-markslip.js"></script>
     <script src="sheets-sync.js"></script>
     <script src="app.js"></script>
   </body>
