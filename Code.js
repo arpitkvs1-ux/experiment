@@ -3,7 +3,7 @@
  *
  * SETUP (one-time):
  * 1. Create a Google Sheet with tabs named exactly: "Master", "Marks", and "Attendance"
- * 2. In Master row 1, paste the same column headers as your CSV (e.g. R.NO., Student Name, house, …)
+ * 2. In Master row 1, paste the same column headers as your CSV (e.g. R. No., Student Name, House, …)
  * 3. Extensions → Apps Script → paste this file → set SPREADSHEET_ID below to your workbook ID (from the URL)
  * 4. Deploy → New deployment → Type: Web app → Execute as: Me → Who has access: Anyone
  * 5. Add TeacherMarks.html + TeacherMarksPdfInclude.html and the include() function below. Set KV_SHEETS_WEB_APP_URL.
@@ -11,7 +11,7 @@
  *    Marks entry lock (Script property KV_MARKS_ENTRY_ENABLED) applies to the class dashboard and the teacher marks page.
  *
  * Marks tab: created automatically with headers:
- * SlipId | Exam | Subject | ExamDate | MaxMarks | Teacher | RollNo | StudentName | Marks | SavedAt | StudentId (= roll / R.NO.)
+ * SlipId | Exam | Subject | ExamDate | MaxMarks | Teacher | RollNo | StudentName | Marks | SavedAt | StudentId (= roll / R. No.)
  */
 var CONFIG = {
   /** Required for Web App calls (getActiveSpreadsheet() is empty over HTTP). */
@@ -149,11 +149,17 @@ function isSecondSaturday_(year, month1, day) {
 }
 
 function findMasterColumnIndex_(headers, wantNamesLower) {
-  for (var i = 0; i < headers.length; i++) {
-    var h = String(headers[i] != null ? headers[i] : "")
+  function norm_(s) {
+    return String(s != null ? s : "")
       .trim()
-      .toLowerCase();
-    if (wantNamesLower.indexOf(h) >= 0) return i;
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  }
+  var wants = {};
+  for (var w = 0; w < wantNamesLower.length; w++) wants[norm_(wantNamesLower[w])] = true;
+  for (var i = 0; i < headers.length; i++) {
+    var h = norm_(headers[i]);
+    if (wants[h]) return i;
   }
   return -1;
 }
@@ -177,7 +183,7 @@ function setupAttendanceRegister_() {
   var rollIdx = findMasterColumnIndex_(headers, ["r.no.", "r.no", "roll no", "roll number", "rollno"]);
   var nameIdx = findMasterColumnIndex_(headers, ["student name", "name"]);
   if (rollIdx < 0 || nameIdx < 0) {
-    throw new Error('Master must contain "R.NO." (or Roll No) and "Student Name" columns.');
+    throw new Error('Master must contain "R. No." (or Roll No) and "Student Name" columns.');
   }
 
   var students = [];
@@ -305,7 +311,7 @@ function setupAttendanceRegisterIntoSheet_(sheetName) {
   var headers = data[0];
   var rollIdx = findMasterColumnIndex_(headers, ["r.no.", "r.no", "roll no", "roll number", "rollno"]);
   var nameIdx = findMasterColumnIndex_(headers, ["student name", "name"]);
-  if (rollIdx < 0 || nameIdx < 0) throw new Error('Master must contain "R.NO." (or Roll No) and "Student Name" columns.');
+  if (rollIdx < 0 || nameIdx < 0) throw new Error('Master must contain "R. No." (or Roll No) and "Student Name" columns.');
   var students = [];
   for (var r = 1; r < data.length; r++) {
     var roll = String(data[r][rollIdx] != null ? data[r][rollIdx] : "").trim();
@@ -485,7 +491,7 @@ function getMasterStudentsForAttendance_() {
   var nameIdx = findMasterColumnIndex_(headers, ["student name", "name"]);
   var genderIdx = findMasterColumnIndex_(headers, ["gender"]);
   if (rollIdx < 0 || nameIdx < 0) {
-    throw new Error('Master must contain "R.NO." (or Roll No) and "Student Name" columns.');
+    throw new Error('Master must contain "R. No." (or Roll No) and "Student Name" columns.');
   }
   var out = [];
   for (var r = 1; r < data.length; r++) {
@@ -1411,6 +1417,7 @@ function handleRequest_(body) {
     return getMarksEntryPolicy_();
   }
   if (action === "setMarksEntryPolicy") {
+    requireDeployer_();
     return setMarksEntryPolicy_(payload);
   }
   if (action === "saveMarkSlip") {
@@ -1467,14 +1474,187 @@ function handleRequest_(body) {
   if (action === "saveTimetableEditorData") {
     return saveTimetableEditorData_(payload);
   }
+  if (action === "backupDriveJson") {
+    return backupDriveJson_(payload);
+  }
+  if (action === "getLatestDriveBackup") {
+    return getLatestDriveBackup_(payload);
+  }
+  if (action === "checkDriveAuthorization") {
+    return checkDriveAuthorization_();
+  }
+  if (action === "migrateMasterHeaders") {
+    requireDeployer_();
+    return migrateMasterHeadersNow_();
+  }
 
   throw new Error("Unknown action: " + action);
+}
+
+function callerEmail_() {
+  var email = "";
+  try {
+    email = String(Session.getActiveUser().getEmail() || "").trim().toLowerCase();
+  } catch (_e1) {}
+  if (!email) {
+    try {
+      email = String(Session.getEffectiveUser().getEmail() || "").trim().toLowerCase();
+    } catch (_e2) {}
+  }
+  return email;
+}
+
+function deployerEmail_() {
+  var fromProps = "";
+  try {
+    fromProps = String(PropertiesService.getScriptProperties().getProperty("KV_DEPLOYER_EMAIL") || "")
+      .trim()
+      .toLowerCase();
+  } catch (_e) {}
+  if (fromProps) return fromProps;
+  try {
+    return String(Session.getEffectiveUser().getEmail() || "").trim().toLowerCase();
+  } catch (_e2) {
+    return "";
+  }
+}
+
+function requireDeployer_() {
+  var caller = callerEmail_();
+  var deployer = deployerEmail_();
+  if (!deployer || !caller || caller !== deployer) {
+    throw new Error("Forbidden: deployer-only action.");
+  }
 }
 
 function normalizeAdmnNo_(v) {
   return String(v != null ? v : "")
     .trim()
     .toUpperCase();
+}
+
+function canonicalMasterHeaderMap_() {
+  return {
+    "r.no.": "R. No.",
+    "r.no": "R. No.",
+    "adm year": "Admission Year",
+    "admn no.": "Admission No.",
+    "admn no": "Admission No.",
+    "admission no": "Admission No.",
+    "admission no.": "Admission No.",
+    doa: "Date of Admission",
+    house: "House",
+    "admn category": "KV Category",
+    "kv category": "KV Category",
+    "mothers name": "Mother's Name",
+    "mother's name": "Mother's Name",
+    "m occupation": "Mother's Occupation",
+    "mother's occupation": "Mother's Occupation",
+    "f occupation": "Father's Occupation",
+    "father's occupation": "Father's Occupation",
+    address: "Address",
+    "admission class": "Admission Class",
+    quota: "Admission Quota",
+    "admission quota": "Admission Quota",
+    bg: "Blood Group",
+    "blood group": "Blood Group",
+    remark: "Remark",
+    remarks: "Remark",
+  };
+}
+
+function migrateMasterHeadersNow_() {
+  var sh = getMasterSheet_();
+  var lc = sh.getLastColumn();
+  if (lc < 1) throw new Error("Master sheet has no columns.");
+  var row = sh.getRange(1, 1, 1, lc).getValues()[0];
+  var map = canonicalMasterHeaderMap_();
+  var changed = 0;
+  for (var i = 0; i < row.length; i++) {
+    var raw = String(row[i] != null ? row[i] : "").trim();
+    if (!raw) continue;
+    var key = raw.toLowerCase();
+    var next = map[key];
+    if (next && next !== raw) {
+      row[i] = next;
+      changed++;
+    }
+  }
+  if (changed > 0) sh.getRange(1, 1, 1, row.length).setValues([row]);
+  return { ok: true, changed: changed, headers: row };
+}
+
+function backupFolder_() {
+  var folderName = "VaayuAppBackups";
+  var it = DriveApp.getFoldersByName(folderName);
+  if (it.hasNext()) return it.next();
+  return DriveApp.createFolder(folderName);
+}
+
+function backupDriveJson_(payload) {
+  var p = payload || {};
+  var snapshot = p.snapshot || null;
+  if (!snapshot || typeof snapshot !== "object") throw new Error("snapshot is required.");
+  var source = String(p.source || "manual").trim() || "manual";
+  var caller = callerEmail_();
+  var userKey = (caller || String(p.userKey || "guest")).trim().toLowerCase() || "guest";
+  userKey = userKey.replace(/[^a-z0-9@._-]+/g, "_");
+  var now = new Date();
+  var ts = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
+  var fileName = "vaayu_backup_" + userKey + "_" + source + "_" + ts + ".json";
+  var jsonText = JSON.stringify(snapshot);
+  var folder = backupFolder_();
+  var file = folder.createFile(fileName, jsonText, MimeType.PLAIN_TEXT);
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty("KV_LATEST_BACKUP_FILE_ID__" + userKey, file.getId());
+  props.setProperty("KV_LATEST_BACKUP_SAVED_AT__" + userKey, now.toISOString());
+  return { ok: true, fileId: file.getId(), fileName: file.getName(), savedAt: now.toISOString(), userKey: userKey };
+}
+
+function getLatestDriveBackup_(payload) {
+  var p = payload || {};
+  var caller = callerEmail_();
+  var userKey = (caller || String(p.userKey || "guest")).trim().toLowerCase() || "guest";
+  userKey = userKey.replace(/[^a-z0-9@._-]+/g, "_");
+  var props = PropertiesService.getScriptProperties();
+  var fileId = String(props.getProperty("KV_LATEST_BACKUP_FILE_ID__" + userKey) || "").trim();
+  if (!fileId) throw new Error("No backup found in Drive.");
+  var file;
+  try {
+    file = DriveApp.getFileById(fileId);
+  } catch (_e) {
+    throw new Error("Latest backup file was not found. Create a new backup first.");
+  }
+  var text = file.getBlob().getDataAsString();
+  var snapshot = JSON.parse(text || "{}");
+  return {
+    ok: true,
+    fileId: file.getId(),
+    fileName: file.getName(),
+    savedAt: String(props.getProperty("KV_LATEST_BACKUP_SAVED_AT__" + userKey) || ""),
+    userKey: userKey,
+    snapshot: snapshot,
+  };
+}
+
+function checkDriveAuthorization_() {
+  try {
+    DriveApp.getRootFolder().getName();
+    return { ok: true, authorized: true };
+  } catch (e) {
+    return { ok: true, authorized: false, error: String(e && e.message ? e.message : e) };
+  }
+}
+
+/** Public runner to trigger one-time Drive authorization from editor Run menu. */
+function authorizeDriveAccess() {
+  return checkDriveAuthorization_();
+}
+
+/** Strict auth trigger: should force OAuth consent if Drive scope is missing. */
+function authorizeDriveAccessStrict() {
+  var root = DriveApp.getRootFolder();
+  return { ok: true, rootName: root.getName() };
 }
 
 function ensureMasterStatusColumn_(sh, headers) {
@@ -1500,12 +1680,13 @@ function setStudentActiveStatus_(payload) {
   var headers = data[0];
   var admnCol = -1;
   for (var c = 0; c < headers.length; c++) {
-    if (String(headers[c] != null ? headers[c] : "").trim().toLowerCase() === "admn no") {
+    var hk = String(headers[c] != null ? headers[c] : "").trim().toLowerCase();
+    if (hk === "admn no" || hk === "admn no." || hk === "admission no" || hk === "admission no.") {
       admnCol = c + 1;
       break;
     }
   }
-  if (admnCol < 1) throw new Error('Missing "Admn No" column in Master.');
+  if (admnCol < 1) throw new Error('Missing "Admission No." column in Master.');
   var statusCol = ensureMasterStatusColumn_(sh, headers);
   var targetRow = -1;
   for (var r = 2; r <= lr; r++) {
@@ -1515,7 +1696,7 @@ function setStudentActiveStatus_(payload) {
       break;
     }
   }
-  if (targetRow < 0) throw new Error("Student not found for Admn No: " + admnNo);
+  if (targetRow < 0) throw new Error("Student not found for Admission No.: " + admnNo);
   var statusText = isActive ? "Active" : "Deactivated";
   sh.getRange(targetRow, statusCol).setValue(statusText);
   return { ok: true, admnNo: admnNo, status: statusText };
@@ -1524,12 +1705,12 @@ function setStudentActiveStatus_(payload) {
 function addStudentToMaster_(payload) {
   var p = payload || {};
   var row = p.row || {};
-  var admnNo = normalizeAdmnNo_(row["Admn No"]);
-  var rollNo = String(row["R.NO."] != null ? row["R.NO."] : "").trim();
+  var admnNo = normalizeAdmnNo_(row["Admission No."]);
+  var rollNo = String(row["R. No."] != null ? row["R. No."] : "").trim();
   var studentName = String(row["Student Name"] != null ? row["Student Name"] : "").trim();
-  if (!rollNo) throw new Error("R.NO. is required.");
+  if (!rollNo) throw new Error("R. No. is required.");
   if (!studentName) throw new Error("Student Name is required.");
-  if (!admnNo) throw new Error("Admn No is required.");
+  if (!admnNo) throw new Error("Admission No. is required.");
   var sh = getMasterSheet_();
   var lr = sh.getLastRow();
   var lc = sh.getLastColumn();
@@ -1538,15 +1719,16 @@ function addStudentToMaster_(payload) {
   var headers = data[0];
   var admnCol = -1;
   for (var c = 0; c < headers.length; c++) {
-    if (String(headers[c] != null ? headers[c] : "").trim().toLowerCase() === "admn no") {
+    var hk = String(headers[c] != null ? headers[c] : "").trim().toLowerCase();
+    if (hk === "admn no" || hk === "admn no." || hk === "admission no" || hk === "admission no.") {
       admnCol = c + 1;
       break;
     }
   }
-  if (admnCol < 1) throw new Error('Missing "Admn No" column in Master.');
+  if (admnCol < 1) throw new Error('Missing "Admission No." column in Master.');
   for (var r = 2; r <= lr; r++) {
     var existingAdmn = normalizeAdmnNo_(data[r - 1][admnCol - 1]);
-    if (existingAdmn === admnNo) throw new Error("Admn No already exists: " + admnNo);
+    if (existingAdmn === admnNo) throw new Error("Admission No. already exists: " + admnNo);
   }
   var statusCol = ensureMasterStatusColumn_(sh, headers);
   var useLastCol = Math.max(sh.getLastColumn(), statusCol);
@@ -1792,6 +1974,11 @@ function doPost(e) {
 function doGet(e) {
   e = e || {};
   var p = e.parameter || {};
+  if (String(p.action || "").trim() === "migrateMasterHeaders") {
+    requireDeployer_();
+    var migrated = migrateMasterHeadersNow_();
+    return ContentService.createTextOutput(JSON.stringify(migrated)).setMimeType(ContentService.MimeType.JSON);
+  }
   var baseUrl = "";
   try {
     baseUrl = ScriptApp.getService().getUrl();

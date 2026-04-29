@@ -5,7 +5,7 @@ import { downloadReportExcel, downloadReportPdf } from "./reportExport.js";
 import { photoUrlFromMasterCell } from "./photoUrl.js";
 import "./App.css";
 
-const DASH_CATS = ["QUOTA", "SOCIAL CAT", "HOUSE", "KV CAT", "GENDER", "MINORITY"];
+const DASH_CATS = ["ADMISSION QUOTA", "SOCIAL CAT", "HOUSE", "KV CAT", "GENDER", "MINORITY"];
 const TIMETABLE_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TIMETABLE_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -32,8 +32,8 @@ function StudentPhotoDetail({ raw, loading }) {
 }
 
 function buildSubOptions(category, students, headers) {
-  const houseIdx = headers.indexOf("house");
-  const admnIdx = headers.indexOf("Admn Category");
+  const houseIdx = headers.indexOf("House");
+  const admnIdx = headers.indexOf("KV Category");
   const genderIdx = headers.indexOf("Gender");
   const minorityIdx = headers.indexOf("Minority");
   const catIdx = headers.indexOf("Category");
@@ -48,7 +48,7 @@ function buildSubOptions(category, students, headers) {
     return [...s].sort();
   };
 
-  if (category === "QUOTA") return ["SGC", "RTE"];
+  if (category === "ADMISSION QUOTA" || category === "QUOTA") return ["SGC", "RTE"];
   if (category === "SOCIAL CAT") {
     const base = uniq(catIdx);
     const extra = ["OBC-All", "OBC-CL", "OBC-NCL"];
@@ -370,7 +370,7 @@ export default function App() {
 
       <section className="card grid-full">
         <h2 className="card-title">Dashboard filter</h2>
-        <p className="card-desc">Same logic as sheet cells C10/D10 + filtered list (QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY).</p>
+        <p className="card-desc">Same logic as sheet cells C10/D10 + filtered list (ADMISSION QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY).</p>
         <div className="row">
           <label className="field">
             <span>Category</span>
@@ -538,7 +538,7 @@ export default function App() {
                 <tr>
                   <th>ID</th>
                   <th>Name</th>
-                  <th>Admn No</th>
+                  <th>Admission No.</th>
                   <th>House</th>
                   <th />
                 </tr>
@@ -548,8 +548,8 @@ export default function App() {
                   <tr key={s.id}>
                     <td>{s.id}</td>
                     <td>{s["Student Name"] || "—"}</td>
-                    <td>{s["Admn No"] || "—"}</td>
-                    <td>{s.house || "—"}</td>
+                    <td>{s["Admission No."] || "—"}</td>
+                    <td>{s.House || "—"}</td>
                     <td>
                       <button type="button" className="btn danger sm" onClick={() => deleteStudent(s.id)}>
                         Delete

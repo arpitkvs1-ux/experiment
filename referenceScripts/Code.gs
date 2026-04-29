@@ -13,8 +13,8 @@ function showFilteredStudents() {
   var headers = data[0];
   var nameIdx = headers.indexOf("Student Name");
   var catIdx = headers.indexOf("Category");
-  var admnCatIdx = headers.indexOf("Admn Category");
-  var houseIdx = headers.indexOf("house");
+  var admnCatIdx = headers.indexOf("KV Category");
+  var houseIdx = headers.indexOf("House");
   var genderIdx = headers.indexOf("Gender");
   var minorityIdx = headers.indexOf("Minority");
   var sgcIdx = headers.indexOf("Single Girl Child");
@@ -23,7 +23,7 @@ function showFilteredStudents() {
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     var isMatch = false;
-    if (category === "QUOTA") {
+    if (category === "ADMISSION QUOTA" || category === "QUOTA") {
       if (subCategory === "SGC" && String(row[sgcIdx]).trim().toUpperCase() === "YES") isMatch = true;
       else if (subCategory === "RTE" && String(row[rteIdx]).trim().toUpperCase() === "YES") isMatch = true;
     } else if (category === "SOCIAL CAT") {

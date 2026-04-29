@@ -9,8 +9,70 @@
   var CONS_STATUS_CACHE_KEY = "kv_cons_status_cache_v1";
   var CONS_ABSENT_CACHE_KEY = "kv_cons_absent_cache_v1";
   var SHEET_SLIP_DETAIL_CACHE_KEY = "kv_sheet_slip_detail_cache_v1";
+  var DRIVE_BACKUP_META_KEY = "kv_drive_backup_meta_v1";
+  var DRIVE_BACKUP_SCHEMA_VERSION = 1;
+  var ACTIVE_USER_KEY = "__kv_active_user_v1";
   var MARKS_ENTRY_DISABLED_MSG =
     "Marks Entry/Edit is currently disabled. Please contact the class teacher";
+
+  function normalizeUserKey(raw) {
+    var s = String(raw == null ? "" : raw).trim().toLowerCase();
+    if (!s) return "guest";
+    return s.replace(/[^a-z0-9@._-]+/g, "_");
+  }
+
+  function currentUserKey() {
+    try {
+      var k = window.__kvUserKey || localStorage.getItem(ACTIVE_USER_KEY) || "guest";
+      return normalizeUserKey(k);
+    } catch (_e) {
+      return "guest";
+    }
+  }
+
+  function setCurrentUserKey(k) {
+    var nk = normalizeUserKey(k);
+    window.__kvUserKey = nk;
+    try {
+      localStorage.setItem(ACTIVE_USER_KEY, nk);
+    } catch (_e) {}
+  }
+
+  function storageScopedKey(rawKey) {
+    var key = String(rawKey || "");
+    if (!/^kv_/i.test(key)) return key;
+    return "u::" + currentUserKey() + "::" + key;
+  }
+
+  (function patchLocalStorageForUserScope() {
+    if (window.__kvStorageScopedPatched) return;
+    window.__kvStorageScopedPatched = true;
+    var proto = Storage && Storage.prototype;
+    if (!proto) return;
+    var _get = proto.getItem;
+    var _set = proto.setItem;
+    var _rem = proto.removeItem;
+    proto.getItem = function (key) {
+      var mapped = storageScopedKey(key);
+      var scopedVal = _get.call(this, mapped);
+      if (scopedVal != null) return scopedVal;
+      var rawKey = String(key || "");
+      if (/^kv_/i.test(rawKey)) {
+        var legacyVal = _get.call(this, rawKey);
+        if (legacyVal != null) {
+          _set.call(this, mapped, legacyVal);
+          return legacyVal;
+        }
+      }
+      return null;
+    };
+    proto.setItem = function (key, value) {
+      return _set.call(this, storageScopedKey(key), value);
+    };
+    proto.removeItem = function (key) {
+      return _rem.call(this, storageScopedKey(key));
+    };
+  })();
 
   function formatShortUserMessage(raw, maxLen) {
     maxLen = maxLen || 160;
@@ -27,25 +89,25 @@
   }
 
   var HEADERS = [
-    "R.NO.",
-    "Adm Year",
-    "Admn No",
-    "DOA",
+    "R. No.",
+    "Admission Year",
+    "Admission No.",
+    "Date of Admission",
     "Student Name",
-    "house",
+    "House",
     "Date Of Birth",
     "Gender",
     "Category",
-    "Admn Category",
-    "Mothers Name",
+    "KV Category",
+    "Mother's Name",
     "Mobile No",
-    "M OCCUPATION",
+    "Mother's Occupation",
     "Fathers Name",
-    "F OCCUPATION",
-    "ADDRESS",
-    "ADMISSION CLASS",
-    "QUOTA",
-    "BG",
+    "Father's Occupation",
+    "Address",
+    "Admission Class",
+    "Admission Quota",
+    "Blood Group",
     "Single Girl Child",
     "RTE",
     "Minority",
@@ -57,43 +119,43 @@
     "Reimbursement Claimed",
     "Total Quarterly Fee",
     "Photo",
-    "REMARK",
+    "Remark",
   ];
   var COMMON_FIELD_PRESETS = {
     Gender: ["Boy", "Girl"],
     Category: ["SC", "ST", "OBC(CL)", "OBC(NCL)", "GEN", "EWS"],
-    "Admn Category": ["GEN", "RTE", "SGC", "SERVICE", "NON-SERVICE"],
+    "KV Category": ["I", "II", "III", "IV", "V", "VI"],
     "Single Girl Child": ["YES", "NO"],
     RTE: ["YES", "NO"],
-    Minority: ["YES", "NO"],
-    QUOTA: ["SGC", "RTE", "NONE"],
-    house: ["Tagore", "Gandhi", "Nehru", "Ashoka"],
-    BG: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+    Minority: ["Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Parsi"],
+    "Admission Quota": ["SGC", "RTE", "NONE"],
+    House: ["Subhash", "Tagore", "Ashoka", "Raman"],
+    "Blood Group": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
     "Reimbursement Claimed": ["YES", "NO"],
   };
   var ADD_FORM_FIELD_CONFIG = {
-    "R.NO.": { type: "text", required: true },
-    "Adm Year": { type: "yearSelect" },
-    "Admn No": { type: "text", required: true },
-    DOA: { type: "dateText" },
+    "R. No.": { type: "text", required: true },
+    "Admission Year": { type: "yearSelect" },
+    "Admission No.": { type: "text", required: true },
+    "Date of Admission": { type: "dateText" },
     "Student Name": { type: "text", required: true },
-    house: { type: "select" },
+    House: { type: "select", options: ["Subhash", "Tagore", "Ashoka", "Raman"] },
     "Date Of Birth": { type: "dateText" },
     Gender: { type: "select" },
-    Category: { type: "select" },
-    "Admn Category": { type: "select" },
-    "Mothers Name": { type: "text" },
+    Category: { type: "select", options: ["SC", "ST", "OBC(CL)", "OBC(NCL)", "GEN", "EWS"] },
+    "KV Category": { type: "select", options: ["I", "II", "III", "IV", "V", "VI"] },
+    "Mother's Name": { type: "text" },
     "Mobile No": { type: "text" },
-    "M OCCUPATION": { type: "text" },
+    "Mother's Occupation": { type: "text" },
     "Fathers Name": { type: "text" },
-    "F OCCUPATION": { type: "text" },
-    ADDRESS: { type: "text" },
-    "ADMISSION CLASS": { type: "text" },
-    QUOTA: { type: "select" },
-    BG: { type: "select" },
+    "Father's Occupation": { type: "text" },
+    Address: { type: "text" },
+    "Admission Class": { type: "text" },
+    "Admission Quota": { type: "select" },
+    "Blood Group": { type: "select" },
     "Single Girl Child": { type: "select", options: ["YES", "NO", "NA"] },
     RTE: { type: "select" },
-    Minority: { type: "select" },
+    Minority: { type: "select", options: ["Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Parsi"] },
     "Email ID": { type: "text" },
     "UBI ID": { type: "text" },
     "Aadhar Card No": { type: "text" },
@@ -102,7 +164,7 @@
     "Reimbursement Claimed": { type: "select" },
     "Total Quarterly Fee": { type: "text" },
     Photo: { type: "photo" },
-    REMARK: { type: "text" },
+    Remark: { type: "text" },
   };
 
   /** Raw Photo field from row (sheet header may be Photo / photo). */
@@ -201,6 +263,7 @@
     for (var li = 1; li < lines.length; li++) {
       var vals = parseCSVLine(lines[li]);
       if (vals.every(function (v) { return !String(v).trim(); })) continue;
+      if (String(vals[0] != null ? vals[0] : "").trim().indexOf("#") === 0) continue;
       var o = {};
       for (var hi = 0; hi < headerCells.length; hi++) {
         var h = headerCells[hi].trim();
@@ -248,7 +311,7 @@
     var set = {};
     var active = activeStudentsOnly(list || []);
     for (var i = 0; i < active.length; i++) {
-      set[attendanceEntryKey(active[i]["R.NO."], active[i]["Student Name"])] = true;
+      set[attendanceEntryKey(active[i]["R. No."], active[i]["Student Name"])] = true;
     }
     return set;
   }
@@ -270,12 +333,80 @@
       .toUpperCase();
   }
 
+  function fieldGuideText(header) {
+    var cfg = ADD_FORM_FIELD_CONFIG[header] || { type: "text" };
+    var requiredTag = cfg.required ? "Required. " : "";
+    if (cfg.type === "select") {
+      if (Array.isArray(cfg.options) && cfg.options.length) {
+        return requiredTag + "Allowed: " + cfg.options.join(" | ");
+      }
+      if (header === "Admission Quota") {
+        var quotaOpts = commonFieldOptions("Admission Quota", students);
+        if (quotaOpts && quotaOpts.length) {
+          return requiredTag + "Allowed: " + quotaOpts.join(" | ");
+        }
+        return requiredTag + "Allowed: SGC | RTE | NONE";
+      }
+      var presets = commonFieldOptions(header, students);
+      if (presets && presets.length) return requiredTag + "Allowed: " + presets.join(" | ");
+      return requiredTag + "Use dropdown values from Students -> Add/Edit form.";
+    }
+    if (header === "R. No.") return "Required. Roll number (digits recommended).";
+    if (header === "Admission Year") return requiredTag + "Year format: YYYY.";
+    if (header === "Admission No.") return "Required. Must be unique.";
+    if (header === "Date of Admission" || header === "Date Of Birth") return "Date format: dd/mm/yyyy.";
+    if (header === "Mobile No") return "10 digits only.";
+    if (header === "Email ID") return "Valid email format (e.g., name@domain.com).";
+    if (header === "UBI ID" || header === "APPAR ID" || header === "PEN") return "Numeric only.";
+    if (header === "Aadhar Card No") return "12 digits only.";
+    if (header === "Total Quarterly Fee") return "Numeric value (e.g., 0, 2500, 2500.50).";
+    if (header === "Photo") return "Optional URL or =IMAGE()/=HYPERLINK() formula text.";
+    if (header === "Student Name") return "Required text.";
+    return requiredTag + "Free text.";
+  }
+
+  function buildCsvTemplateRows() {
+    var rows = [];
+    rows.push(HEADERS.slice());
+    rows.push(
+      HEADERS.map(function (h, i) {
+        if (i === 0) return "# FIELD RULES";
+        return fieldGuideText(h);
+      })
+    );
+    rows.push(
+      HEADERS.map(function (_, i) {
+        if (i === 0) return "# START DATA FROM NEXT ROW";
+        return "";
+      })
+    );
+    return rows;
+  }
+
+  function buildTemplateInstructionRows() {
+    var rows = [];
+    rows.push(["Student Bulk Upload - Instructions"]);
+    rows.push([""]);
+    rows.push(["1) Do not change column names in Data Entry sheet."]);
+    rows.push(["2) Fill one student per row in Data Entry sheet."]);
+    rows.push(["3) Required fields: R. No., Admission No., Student Name."]);
+    rows.push(["4) Date format: dd/mm/yyyy (Date of Admission, Date Of Birth)."]);
+    rows.push(["5) Admission No. must be unique for each student."]);
+    rows.push(["6) Keep values consistent with allowed options below."]);
+    rows.push([""]);
+    rows.push(["Field", "Allowed values / format"]);
+    for (var i = 0; i < HEADERS.length; i++) {
+      rows.push([HEADERS[i], fieldGuideText(HEADERS[i])]);
+    }
+    return rows;
+  }
+
   function hasDuplicateAdmnNos(list) {
     var seen = {};
     for (var i = 0; i < list.length; i++) {
-      var admn = normalizeAdmnNo(list[i] && list[i]["Admn No"]);
-      if (!admn) return { ok: false, error: 'Missing "Admn No" in one or more rows.' };
-      if (seen[admn]) return { ok: false, error: 'Duplicate "Admn No" found: ' + admn };
+      var admn = normalizeAdmnNo(list[i] && list[i]["Admission No."]);
+      if (!admn) return { ok: false, error: 'Missing "Admission No." in one or more rows.' };
+      if (seen[admn]) return { ok: false, error: 'Duplicate "Admission No." found: ' + admn };
       seen[admn] = true;
     }
     return { ok: true };
@@ -287,7 +418,7 @@
     for (var i = 0; i < list.length; i++) {
       var st = list[i] || {};
       if (ignoreId != null && Number(st.id) === Number(ignoreId)) continue;
-      if (normalizeAdmnNo(st["Admn No"]) === want) return true;
+      if (normalizeAdmnNo(st["Admission No."]) === want) return true;
     }
     return false;
   }
@@ -301,6 +432,7 @@
     for (i = 0; i < preset.length; i++) {
       var pv = String(preset[i] != null ? preset[i] : "").trim();
       if (!pv) continue;
+      if (h === "Admission Quota" && /^saq\??$/i.test(pv)) continue;
       var pk = pv.toLowerCase();
       if (seen[pk]) continue;
       seen[pk] = true;
@@ -310,6 +442,7 @@
     for (i = 0; i < src.length; i++) {
       var v = String(src[i] && src[i][h] != null ? src[i][h] : "").trim();
       if (!v) continue;
+      if (h === "Admission Quota" && /^saq\??$/i.test(v)) continue;
       var k = v.toLowerCase();
       if (seen[k]) continue;
       seen[k] = true;
@@ -355,7 +488,7 @@
 
   function normalizeStudentDateFields(row) {
     if (!row || typeof row !== "object") return row;
-    var keys = ["DOA", "Date Of Birth"];
+    var keys = ["Date of Admission", "Date Of Birth"];
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
       var raw = String(row[k] != null ? row[k] : "").trim();
@@ -373,10 +506,10 @@
     var changed = false;
     for (var i = 0; i < list.length; i++) {
       var row = list[i] || {};
-      var beforeDoa = String(row.DOA != null ? row.DOA : "");
+      var beforeDoa = String(row["Date of Admission"] != null ? row["Date of Admission"] : "");
       var beforeDob = String(row["Date Of Birth"] != null ? row["Date Of Birth"] : "");
       normalizeStudentDateFields(row);
-      if (beforeDoa !== String(row.DOA != null ? row.DOA : "") || beforeDob !== String(row["Date Of Birth"] != null ? row["Date Of Birth"] : "")) {
+      if (beforeDoa !== String(row["Date of Admission"] != null ? row["Date of Admission"] : "") || beforeDob !== String(row["Date Of Birth"] != null ? row["Date Of Birth"] : "")) {
         changed = true;
       }
     }
@@ -479,14 +612,14 @@
 
   function upsertStudentAddPending(studentRow) {
     if (!studentRow || typeof studentRow !== "object") return;
-    var admnNo = normalizeAdmnNo(studentRow["Admn No"]);
+    var admnNo = normalizeAdmnNo(studentRow["Admission No."]);
     if (!admnNo) return;
     var q = loadStudentAddPending();
     var next = [];
     var replaced = false;
     for (var i = 0; i < q.length; i++) {
       var it = q[i] || {};
-      if (normalizeAdmnNo(it["Admn No"]) === admnNo) {
+      if (normalizeAdmnNo(it["Admission No."]) === admnNo) {
         next.push(studentRow);
         replaced = true;
       } else {
@@ -500,7 +633,7 @@
   function removeStudentAddPending(admnNo) {
     var key = normalizeAdmnNo(admnNo);
     var q = loadStudentAddPending().filter(function (it) {
-      return normalizeAdmnNo((it || {})["Admn No"]) !== key;
+      return normalizeAdmnNo((it || {})["Admission No."]) !== key;
     });
     saveStudentAddPending(q);
   }
@@ -519,6 +652,144 @@
     try {
       localStorage.setItem(key, JSON.stringify(obj && typeof obj === "object" ? obj : {}));
     } catch (_e) {}
+  }
+
+  function backupStorageKeys() {
+    return [
+      STORAGE_KEY,
+      MARKS_STORAGE_KEY,
+      MARKS_PENDING_KEY,
+      STUDENT_STATUS_PENDING_KEY,
+      STUDENT_ADD_PENDING_KEY,
+      CONS_STATUS_CACHE_KEY,
+      CONS_ABSENT_CACHE_KEY,
+      SHEET_SLIP_DETAIL_CACHE_KEY,
+      "kv_attendance_cache_v1",
+      "kv_attendance_pending_v1",
+      "kv_attendance_bulk_pending_v1",
+      "kv_attendance_backlog_queue_v1",
+    ];
+  }
+
+  function collectLocalDatasetSnapshot() {
+    var payload = {
+      schemaVersion: DRIVE_BACKUP_SCHEMA_VERSION,
+      app: "vaayu-browser-app",
+      savedAt: new Date().toISOString(),
+      storage: {},
+    };
+    var keys = backupStorageKeys();
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      payload.storage[k] = localStorage.getItem(k);
+    }
+    return payload;
+  }
+
+  function applyLocalDatasetSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") throw new Error("Invalid backup payload.");
+    var storage = snapshot.storage || {};
+    var keys = backupStorageKeys();
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (!Object.prototype.hasOwnProperty.call(storage, k)) continue;
+      var v = storage[k];
+      if (v == null) localStorage.removeItem(k);
+      else localStorage.setItem(k, String(v));
+    }
+  }
+
+  function getDailyBackupMeta() {
+    try {
+      var raw = localStorage.getItem(DRIVE_BACKUP_META_KEY);
+      var obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function setDailyBackupMeta(meta) {
+    try {
+      localStorage.setItem(DRIVE_BACKUP_META_KEY, JSON.stringify(meta || {}));
+    } catch (_e) {}
+  }
+
+  function ymdTodayLocal() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return y + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+  }
+
+  function tryAutoDriveBackupDaily() {
+    if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) return Promise.resolve(false);
+    var today = ymdTodayLocal();
+    var meta = getDailyBackupMeta();
+    if (String(meta.ymd || "") === today) return Promise.resolve(false);
+    var snapshot = collectLocalDatasetSnapshot();
+    return KVSheets.sheetsCall("backupDriveJson", { snapshot: snapshot, source: "auto-daily", userKey: currentUserKey() })
+      .then(function (res) {
+        setDailyBackupMeta({
+          ymd: today,
+          fileId: String((res && res.fileId) || ""),
+          savedAt: String((res && res.savedAt) || new Date().toISOString()),
+        });
+        return true;
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
+  function marksMergeKeyFromRecord(record) {
+    return [
+      String(record && record.examName != null ? record.examName : "").trim().toLowerCase(),
+      String(record && record.subject != null ? record.subject : "").trim().toLowerCase(),
+    ].join("::");
+  }
+
+  function toMillisSafe(isoLike) {
+    var ms = Date.parse(String(isoLike || ""));
+    return isNaN(ms) ? 0 : ms;
+  }
+
+  function mergeMarksByLatest(localRecords, incomingRecords) {
+    var map = {};
+    var i;
+    function put(rec, source) {
+      if (!rec) return;
+      var key = marksMergeKeyFromRecord(rec);
+      if (!key || key === "::") return;
+      var existing = map[key];
+      var ts = toMillisSafe(rec.savedAt);
+      if (!existing || ts >= existing.ts) map[key] = { record: rec, ts: ts, source: source };
+    }
+    for (i = 0; i < (localRecords || []).length; i++) put(localRecords[i], "local");
+    for (i = 0; i < (incomingRecords || []).length; i++) put(incomingRecords[i], "sheet");
+    var out = [];
+    var keys = Object.keys(map);
+    for (i = 0; i < keys.length; i++) out.push(map[keys[i]].record);
+    out.sort(function (a, b) {
+      return toMillisSafe(b && b.savedAt) - toMillisSafe(a && a.savedAt);
+    });
+    return out;
+  }
+
+  function fetchAllSheetMarkRecords() {
+    if (!window.KVSheets || typeof KVSheets.sheetsCall !== "function") {
+      return Promise.reject(new Error("Sheets client not loaded."));
+    }
+    return KVSheets.sheetsCall("listMarkSlips", {}).then(function (res) {
+      var slips = (res && res.slips) || [];
+      var jobs = slips.map(function (s) {
+        return KVSheets.sheetsCall("getMarkSlip", { slipId: s.slipId }).then(function (detail) {
+          return sheetApiToRecord(detail.meta, detail.entries, s.slipId);
+        });
+      });
+      return Promise.all(jobs);
+    });
   }
 
   function upsertMarksPending(record, action) {
@@ -572,8 +843,8 @@
     }
     var nameKey = "Student Name";
     var catKey = "Category";
-    var admnCatKey = "Admn Category";
-    var houseKey = "house";
+    var admnCatKey = "KV Category";
+    var houseKey = "House";
     var genderKey = "Gender";
     var minorityKey = "Minority";
     var sgcKey = "Single Girl Child";
@@ -582,7 +853,7 @@
     for (var i = 0; i < students.length; i++) {
       var s = students[i];
       var isMatch = false;
-      if (category === "QUOTA") {
+      if (category === "ADMISSION QUOTA" || category === "QUOTA") {
         if (subCategory === "SGC" && String(s[sgcKey] || "").trim().toUpperCase() === "YES") isMatch = true;
         else if (subCategory === "RTE" && String(s[rteKey] || "").trim().toUpperCase() === "YES") isMatch = true;
       } else if (category === "SOCIAL CAT") {
@@ -678,7 +949,7 @@
   }
 
   function isDataStudentRow(s) {
-    if (String(s["R.NO."] != null ? s["R.NO."] : "").trim() !== "") return true;
+    if (String(s["R. No."] != null ? s["R. No."] : "").trim() !== "") return true;
     if (String(s["Student Name"] != null ? s["Student Name"] : "").trim() !== "") return true;
     return false;
   }
@@ -690,8 +961,8 @@
       if (isDataStudentRow(list[i])) out.push(list[i]);
     }
     out.sort(function (a, b) {
-      var sa = String(a["R.NO."] != null ? a["R.NO."] : "").trim();
-      var sb = String(b["R.NO."] != null ? b["R.NO."] : "").trim();
+      var sa = String(a["R. No."] != null ? a["R. No."] : "").trim();
+      var sb = String(b["R. No."] != null ? b["R. No."] : "").trim();
       var na = parseFloat(sa.replace(/[^\d.]/g, ""));
       var nb = parseFloat(sb.replace(/[^\d.]/g, ""));
       if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
@@ -780,6 +1051,50 @@
     document.title = "Vaayu";
     var modalSchool = document.getElementById("modalSchoolName");
     if (modalSchool) modalSchool.textContent = school;
+  }
+
+  function currentAccountInfo() {
+    try {
+      if (window.AndroidAccount && typeof window.AndroidAccount.getCurrentAccountJson === "function") {
+        var raw = window.AndroidAccount.getCurrentAccountJson();
+        var obj = raw ? JSON.parse(String(raw)) : {};
+        return obj && typeof obj === "object" ? obj : {};
+      }
+    } catch (_e) {}
+    return { signedIn: false, email: "", displayName: "", id: "" };
+  }
+
+  function preferredAccountKey(info) {
+    var email = String(info && info.email ? info.email : "").trim().toLowerCase();
+    if (email) return email;
+    var id = String(info && info.id ? info.id : "").trim();
+    if (id) return "gid_" + id;
+    return "guest";
+  }
+
+  function updateAccountUiLine() {
+    var line = document.getElementById("settingsAccountLine");
+    if (!line) return;
+    var info = currentAccountInfo();
+    if (info && info.signedIn) {
+      var label = String(info.displayName || info.email || "Signed-in user");
+      line.textContent = "Account: " + label + " (" + String(info.email || "").trim() + ")";
+    } else {
+      line.textContent = "Account: Guest (local only)";
+    }
+  }
+
+  function requireSignedInForDrive() {
+    if (!(window.AndroidAccount && typeof window.AndroidAccount.getCurrentAccountJson === "function")) return true;
+    var info = currentAccountInfo();
+    if (info && info.signedIn) return true;
+    alert("Please sign in with Google first.");
+    return false;
+  }
+
+  function modalClassSubtitle() {
+    var klass = String(typeof window.KV_SCHOOL_CLASS !== "undefined" && window.KV_SCHOOL_CLASS != null ? window.KV_SCHOOL_CLASS : "").trim();
+    return klass && klass !== "—" ? klass : "";
   }
 
   function marksValidHint(maxMarks) {
@@ -925,9 +1240,9 @@
     return "Fix this cell first.";
   }
 
-  /** Roll number (R.NO.) stored as marks entry studentId and in Sheets column StudentId. */
+  /** Roll number (R. No.) stored as marks entry studentId and in Sheets column StudentId. */
   function marksStudentPersistId(st) {
-    return String(st["R.NO."] != null ? st["R.NO."] : "").trim();
+    return String(st["R. No."] != null ? st["R. No."] : "").trim();
   }
 
   /** data-student-id value: roll when present, else stable internal key (empty rolls). */
@@ -997,7 +1312,7 @@
         }
         return null;
       }
-      var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
+      var roll = String(st["R. No."] != null ? st["R. No."] : "").trim() || "—";
       var rollId = marksStudentPersistId(st);
       var nm = stName;
       var pctDisplay = v.isAb ? "—" : ((v.num / maxMarks) * 100).toFixed(2) + "%";
@@ -1154,7 +1469,7 @@
             map[k] = p.isActive !== false;
           }
           for (var li = 0; li < list.length; li++) {
-            var ak = normalizeAdmnNo(list[li] && list[li]["Admn No"]);
+            var ak = normalizeAdmnNo(list[li] && list[li]["Admission No."]);
             if (ak && Object.prototype.hasOwnProperty.call(map, ak)) {
               list[li].isActive = !!map[ak];
             }
@@ -1274,7 +1589,7 @@
     function next() {
       if (i >= q.length) return Promise.resolve(true);
       var row = q[i++] || {};
-      var admnNo = normalizeAdmnNo(row["Admn No"]);
+      var admnNo = normalizeAdmnNo(row["Admission No."]);
       if (!admnNo) return next();
       return KVSheets.sheetsCall("addStudentToMaster", { row: row })
         .then(function () {
@@ -2014,7 +2329,7 @@
   }
 
   function admissionCategorySummary(students) {
-    return genderWiseSummary(students, "Admn Category", "Admn Category");
+    return genderWiseSummary(students, "KV Category", "KV Category");
   }
 
   function customReportRows(students, selectedIndices) {
@@ -2026,7 +2341,7 @@
     var out = [headers];
     for (var r = 0; r < students.length; r++) {
       var s = students[r];
-      if (!String(s["R.NO."] ?? s["Student Name"] ?? "").trim()) continue;
+      if (!String(s["R. No."] ?? s["Student Name"] ?? "").trim()) continue;
       var line = [];
       for (var j = 0; j < selectedIndices.length; j++) {
         var ci = selectedIndices[j];
@@ -2048,8 +2363,8 @@
   }
 
   function buildSubOptions(category, students) {
-    var houseIdx = HEADERS.indexOf("house");
-    var admnIdx = HEADERS.indexOf("Admn Category");
+    var houseIdx = HEADERS.indexOf("House");
+    var admnIdx = HEADERS.indexOf("KV Category");
     var genderIdx = HEADERS.indexOf("Gender");
     var minorityIdx = HEADERS.indexOf("Minority");
     var catIdx = HEADERS.indexOf("Category");
@@ -2057,7 +2372,7 @@
       if (idx < 0) return [];
       return getUniqueValues(students, idx);
     }
-    if (category === "QUOTA") return ["SGC", "RTE"];
+    if (category === "ADMISSION QUOTA" || category === "QUOTA") return ["SGC", "RTE"];
     if (category === "SOCIAL CAT") {
       var base = uniq(catIdx);
       var extra = ["OBC-All", "OBC-CL", "OBC-NCL"];
@@ -2140,10 +2455,10 @@
       var el = document.getElementById("add_" + fieldId(h));
       if (!el) continue;
       var vv = String(st[h] != null ? st[h] : "");
-      if (h === "DOA" || h === "Date Of Birth") vv = normalizeDateToDmy(vv) || "";
+      if (h === "Date of Admission" || h === "Date Of Birth") vv = normalizeDateToDmy(vv) || "";
       el.value = vv;
     }
-    var admnEl = document.getElementById("add_" + fieldId("Admn No"));
+    var admnEl = document.getElementById("add_" + fieldId("Admission No."));
     if (admnEl) admnEl.disabled = true;
     syncSingleGirlChildByGender();
   }
@@ -2154,7 +2469,7 @@
     if (submitBtn) submitBtn.textContent = "Add to database";
     var addTabBtn = document.querySelector('.tab[data-tab="add"]');
     if (addTabBtn) addTabBtn.textContent = "Add student";
-    var admnEl = document.getElementById("add_" + fieldId("Admn No"));
+    var admnEl = document.getElementById("add_" + fieldId("Admission No."));
     if (admnEl) admnEl.disabled = false;
     var form = document.getElementById("formAdd");
     if (form) form.reset();
@@ -2217,7 +2532,7 @@
     for (var i = 0; i < list.length; i++) {
       var st = list[i];
       var tr = document.createElement("tr");
-      var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
+      var roll = String(st["R. No."] != null ? st["R. No."] : "").trim() || "—";
       var nm = String(st["Student Name"] || "").trim() || "—";
       var domKey = marksStudentDomKey(st);
       tr.innerHTML =
@@ -2372,13 +2687,20 @@
 
   function openModal(title, data, opts) {
     opts = opts || {};
-    document.getElementById("modalTitle").textContent = title;
+    var titleEl = document.getElementById("modalTitle");
+    var subtitleText = String(opts.subtitle || "").trim();
+    var titleText = String(title || "");
+    if (opts.classOnSecondLine && subtitleText) {
+      titleText = subtitleText;
+      subtitleText = String(title || "");
+    }
+    if (titleEl) titleEl.textContent = titleText;
     var subtitleEl = document.getElementById("modalSubtitle");
     var summaryEl = document.getElementById("modalSummaryGrid");
     if (subtitleEl) {
-      var subtitle = String(opts.subtitle || "").trim();
-      subtitleEl.textContent = subtitle;
-      subtitleEl.hidden = !subtitle;
+      subtitleEl.textContent = subtitleText;
+      subtitleEl.hidden = !subtitleText;
+      subtitleEl.classList.toggle("report-subtitle--neutral", !!opts.classOnSecondLine && !!subtitleText);
     }
     if (summaryEl) {
       summaryEl.innerHTML = "";
@@ -2467,11 +2789,11 @@
       var tr = document.createElement("tr");
       tr.innerHTML =
         "<td>" +
-        escapeHtml(String(s["R.NO."] != null ? s["R.NO."] : "").trim() || "—") +
+        escapeHtml(String(s["R. No."] != null ? s["R. No."] : "").trim() || "—") +
         "</td><td>" +
         escapeHtml(s["Student Name"] || "—") +
         "</td><td>" +
-        escapeHtml(s["Admn No"] || "—") +
+        escapeHtml(s["Admission No."] || "—") +
         "</td><td>" +
         (isStudentActive(s) ? "Active" : "Deactivated") +
         '</td><td><button type="button" class="btn outline sm edit-btn" data-id="' +
@@ -2507,7 +2829,7 @@
         students[idx].isActive = nextState;
         saveStudents(students);
         refreshUI();
-        var admnNo = normalizeAdmnNo(students[idx]["Admn No"]);
+        var admnNo = normalizeAdmnNo(students[idx]["Admission No."]);
         if (!admnNo) return;
         if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
           upsertStudentStatusPending(admnNo, nextState);
@@ -2541,6 +2863,9 @@
     });
     if (navId === "timetable" && typeof window.__kvTimetableOnShow === "function") {
       window.__kvTimetableOnShow();
+    }
+    if (navId !== "settings" && typeof window.__resetSettingsTimetableEditor === "function") {
+      window.__resetSettingsTimetableEditor();
     }
     if (navId === "marks") {
       refreshMarksEntryPolicyFromServer({ silent: true }).finally(function () {
@@ -3345,7 +3670,7 @@
       var out = [];
       for (var i = 0; i < list.length; i++) {
         out.push({
-          rollNo: String(list[i]["R.NO."] != null ? list[i]["R.NO."] : "").trim(),
+          rollNo: String(list[i]["R. No."] != null ? list[i]["R. No."] : "").trim(),
           studentName: String(list[i]["Student Name"] || "").trim(),
           gender: String(list[i]["Gender"] || "").trim(),
           status: "P",
@@ -3705,7 +4030,11 @@
         var rows0 = [["Roll No", "Student Name"]];
         for (var i0 = 0; i0 < abs0.length; i0++) rows0.push([String(abs0[i0].rollNo || ""), String(abs0[i0].studentName || "")]);
         if (!abs0.length) rows0.push(["—", "No absentees"]);
-        openModal("Today's Absentees (" + ymdToDmy(date) + ")", rows0, { exportable: false });
+        openModal("Today's Absentees (" + ymdToDmy(date) + ")", rows0, {
+          exportable: false,
+          subtitle: modalClassSubtitle(),
+          classOnSecondLine: true,
+        });
         return true;
       }
       if (showFromCache(c)) {
@@ -3731,7 +4060,11 @@
           var rows = [["Roll No", "Student Name"]];
           for (var i = 0; i < abs.length; i++) rows.push([String(abs[i].rollNo || ""), String(abs[i].studentName || "")]);
           if (!abs.length) rows.push(["—", "No absentees"]);
-          openModal("Today's Absentees (" + ymdToDmy(res.date || date) + ")", rows, { exportable: false });
+          openModal("Today's Absentees (" + ymdToDmy(res.date || date) + ")", rows, {
+            exportable: false,
+            subtitle: modalClassSubtitle(),
+            classOnSecondLine: true,
+          });
           refreshAttendanceByDateFromSheets(date);
         })
         .catch(function () {
@@ -3752,7 +4085,7 @@
           ["Total", String(s0.totals.girls || 0), String(s0.totals.boys || 0), String(s0.totals.total || 0)],
           ["Present", String(s0.present.girls || 0), String(s0.present.boys || 0), String(s0.present.total || 0)],
           ["Absent", String(s0.absent.girls || 0), String(s0.absent.boys || 0), String(s0.absent.total || 0)],
-        ], { exportable: false, headerBlue: true });
+        ], { exportable: false, headerBlue: true, subtitle: modalClassSubtitle(), classOnSecondLine: true });
         return true;
       }
       if (showSummary(c)) {
@@ -3779,7 +4112,7 @@
             ["Total", String(res.totals.girls || 0), String(res.totals.boys || 0), String(res.totals.total || 0)],
             ["Present", String(res.present.girls || 0), String(res.present.boys || 0), String(res.present.total || 0)],
             ["Absent", String(res.absent.girls || 0), String(res.absent.boys || 0), String(res.absent.total || 0)],
-          ], { exportable: false, headerBlue: true });
+          ], { exportable: false, headerBlue: true, subtitle: modalClassSubtitle(), classOnSecondLine: true });
           refreshAttendanceByDateFromSheets(date);
         })
         .catch(function () {
@@ -4031,46 +4364,65 @@
   }
 
   function wireSettingsTimetableEditor() {
-    var typeSel = document.getElementById("settingsTimetableType");
-    var teacherWrap = document.getElementById("settingsTeacherCodeWrap");
-    var teacherCodeInput = document.getElementById("settingsTeacherCode");
-    var btnLoad = document.getElementById("btnSettingsTimetableLoad");
+    var btnClass = document.getElementById("btnSettingsClassTimetable");
+    var btnTeacher = document.getElementById("btnSettingsTeacherTimetable");
+    var entityWrap = document.getElementById("settingsEntityNameWrap");
+    var entityLabel = document.getElementById("settingsEntityNameLabel");
+    var entityInput = document.getElementById("settingsEntityNameInput");
+    var gridWrap = document.getElementById("settingsTimetableGridWrap");
     var btnSave = document.getElementById("btnSettingsTimetableSave");
     var thead = document.getElementById("settingsTimetableHead");
     var tbody = document.getElementById("settingsTimetableBody");
-    if (!typeSel || !btnLoad || !btnSave || !thead || !tbody) return;
+    if (!btnClass || !btnTeacher || !entityWrap || !entityLabel || !entityInput || !gridWrap || !btnSave || !thead || !tbody) return;
 
     var ttEditorState = {
       dayKeys: [],
       periodLabels: [],
+      entityType: "",
+    };
+    var ttEditorCache = {
+      classRes: null,
+      teacherResByCode: {},
     };
 
     function hasSheets() {
       return !!(window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl());
     }
 
-    function currentType() {
-      return String(typeSel.value || "class").toLowerCase() === "teacher" ? "teacher" : "class";
+    function currentEntityName() {
+      return String((entityInput && entityInput.value) || "").trim();
     }
 
-    function currentTeacherCode() {
-      return String((teacherCodeInput && teacherCodeInput.value) || "").trim();
+    function setModeButtonState(type) {
+      btnClass.className = type === "class" ? "btn primary" : "btn outline";
+      btnTeacher.className = type === "teacher" ? "btn primary" : "btn outline";
     }
 
-    function toggleTeacherField() {
-      var isTeacher = currentType() === "teacher";
-      if (teacherWrap) teacherWrap.hidden = !isTeacher;
+    function setEntityField(type) {
+      entityWrap.hidden = false;
+      entityWrap.style.display = "";
+      entityLabel.textContent = type === "class" ? "Class" : "Teacher Name";
+      entityInput.placeholder = type === "class" ? "e.g. VII A" : "e.g. TGT WE";
+    }
+
+    function resetEditorUi() {
+      ttEditorState.dayKeys = [];
+      ttEditorState.periodLabels = [];
+      ttEditorState.entityType = "";
+      entityWrap.hidden = true;
+      entityWrap.style.display = "none";
+      gridWrap.hidden = true;
+      btnSave.hidden = true;
+      thead.innerHTML = "";
+      tbody.innerHTML = "";
+      setModeButtonState("");
     }
 
     function buildHead(type, periodLabels) {
       var html = "<tr><th>Day</th>";
       var i;
       for (i = 0; i < periodLabels.length; i++) {
-        if (type === "class") {
-          html += "<th>P" + periodLabels[i] + " Subject</th><th>P" + periodLabels[i] + " Teacher</th>";
-        } else {
-          html += "<th>P" + periodLabels[i] + " Class</th><th>P" + periodLabels[i] + " Subject</th>";
-        }
+        html += "<th>Period " + periodLabels[i] + "</th>";
       }
       html += "</tr>";
       thead.innerHTML = html;
@@ -4081,15 +4433,16 @@
       var di, pi;
       for (di = 0; di < dayKeys.length; di++) {
         var dayKey = dayKeys[di];
-        html += "<tr><td>" + dayKey + "</td>";
+        html += '<tr><td class="tt-day-cell">' + dayKey + "</td>";
         for (pi = 0; pi < periodLabels.length; pi++) {
           var period = periodLabels[pi];
           var row = rowsMap[dayKey] || {};
           var cell = row[period] || {};
           var leftVal = type === "class" ? String(cell.subject || "") : String(cell.clazz || "");
           var rightVal = type === "class" ? String(cell.teacher || "") : String(cell.subject || "");
+          html += '<td><div class="tt-cell-stack">';
           html +=
-            '<td><input type="text" data-day="' +
+            '<input class="tt-mini-input" type="text" data-day="' +
             dayKey +
             '" data-period="' +
             period +
@@ -4097,9 +4450,9 @@
             escapeHtml(leftVal) +
             '" placeholder="' +
             (type === "class" ? "Subject" : "Class") +
-            '" /></td>';
+            '" />';
           html +=
-            '<td><input type="text" data-day="' +
+            '<input class="tt-mini-input" type="text" data-day="' +
             dayKey +
             '" data-period="' +
             period +
@@ -4107,7 +4460,8 @@
             escapeHtml(rightVal) +
             '" placeholder="' +
             (type === "class" ? "Teacher" : "Subject") +
-            '" /></td>';
+            '" />';
+          html += "</div></td>";
         }
         html += "</tr>";
       }
@@ -4137,37 +4491,82 @@
       return rows;
     }
 
-    btnLoad.addEventListener("click", function () {
+    function renderEditor(type, res) {
+      ttEditorState.dayKeys = Array.isArray(res && res.dayKeys) ? res.dayKeys : [];
+      ttEditorState.periodLabels = Array.isArray(res && res.periodLabels) ? res.periodLabels : [];
+      ttEditorState.entityType = type;
+      buildHead(type, ttEditorState.periodLabels);
+      buildBody(type, ttEditorState.dayKeys, ttEditorState.periodLabels, (res && res.rowsMap) || {});
+      gridWrap.hidden = false;
+      btnSave.hidden = false;
+    }
+
+    function cacheEditorRes(type, teacherCode, res) {
+      if (!res) return;
+      if (type === "class") ttEditorCache.classRes = res;
+      else ttEditorCache.teacherResByCode[String(teacherCode || "").trim().toLowerCase()] = res;
+    }
+
+    function getCachedEditorRes(type, teacherCode) {
+      if (type === "class") return ttEditorCache.classRes;
+      var key = String(teacherCode || "").trim().toLowerCase();
+      return ttEditorCache.teacherResByCode[key] || null;
+    }
+
+    function prefetchEditorData() {
+      if (!hasSheets()) return;
+      KVSheets.sheetsCall("getTimetableEditorData", { entityType: "class", teacherCode: "" })
+        .then(function (res) {
+          cacheEditorRes("class", "", res);
+        })
+        .catch(function () {});
+      KVSheets.sheetsCall("getTimetableEditorData", { entityType: "teacher", teacherCode: "" })
+        .then(function (res) {
+          var tc = String((res && res.teacherCode) || "").trim();
+          cacheEditorRes("teacher", tc, res);
+          cacheEditorRes("teacher", "", res);
+        })
+        .catch(function () {});
+    }
+
+    function defaultEditorRes(type) {
+      var dayKeys = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+      var periodLabels = ["1", "2", "3", "4", "5", "6", "7", "8"];
+      var rowsMap = {};
+      for (var di = 0; di < dayKeys.length; di++) {
+        rowsMap[dayKeys[di]] = {};
+        for (var pi = 0; pi < periodLabels.length; pi++) {
+          rowsMap[dayKeys[di]][periodLabels[pi]] = type === "class" ? { subject: "", teacher: "" } : { clazz: "", subject: "" };
+        }
+      }
+      return { dayKeys: dayKeys, periodLabels: periodLabels, rowsMap: rowsMap };
+    }
+
+    function loadEditor(type) {
       if (!hasSheets()) {
         alert("Configure the Google Apps Script web app URL in settings first.");
         return;
       }
-      var type = currentType();
-      var teacherCode = currentTeacherCode();
-      if (type === "teacher" && !teacherCode) {
-        alert("Enter teacher code first.");
-        return;
-      }
-      btnLoad.disabled = true;
-      var prev = btnLoad.textContent;
-      btnLoad.textContent = "Loading…";
-      KVSheets.sheetsCall("getTimetableEditorData", {
-        entityType: type,
-        teacherCode: teacherCode,
-      })
-        .then(function (res) {
-          ttEditorState.dayKeys = Array.isArray(res.dayKeys) ? res.dayKeys : [];
-          ttEditorState.periodLabels = Array.isArray(res.periodLabels) ? res.periodLabels : [];
-          buildHead(type, ttEditorState.periodLabels);
-          buildBody(type, ttEditorState.dayKeys, ttEditorState.periodLabels, res.rowsMap || {});
-        })
-        .catch(function (e) {
-          alert(formatShortUserMessage(e && e.message ? e.message : e));
-        })
-        .finally(function () {
-          btnLoad.disabled = false;
-          btnLoad.textContent = prev;
-        });
+      setModeButtonState(type);
+      setEntityField(type);
+      gridWrap.hidden = true;
+      btnSave.hidden = true;
+      thead.innerHTML = "";
+      tbody.innerHTML = "";
+      ttEditorState.dayKeys = [];
+      ttEditorState.periodLabels = [];
+      var entityName = currentEntityName();
+      var cached = getCachedEditorRes(type, type === "teacher" ? entityName : "");
+      renderEditor(type, cached || defaultEditorRes(type));
+      ttEditorState.entityType = type;
+    }
+
+    btnClass.addEventListener("click", function () {
+      loadEditor("class");
+    });
+
+    btnTeacher.addEventListener("click", function () {
+      loadEditor("teacher");
     });
 
     btnSave.addEventListener("click", function () {
@@ -4175,14 +4574,18 @@
         alert("Configure the Google Apps Script web app URL in settings first.");
         return;
       }
-      var type = currentType();
-      var teacherCode = currentTeacherCode();
-      if (type === "teacher" && !teacherCode) {
-        alert("Enter teacher code first.");
+      var type = ttEditorState.entityType;
+      if (type !== "class" && type !== "teacher") {
+        alert("Open Class Time Table or Teacher's Time Table first.");
+        return;
+      }
+      var entityName = currentEntityName();
+      if (type === "teacher" && !entityName) {
+        alert("Enter Teacher Name first.");
         return;
       }
       if (!ttEditorState.dayKeys.length || !ttEditorState.periodLabels.length) {
-        alert("Load timetable first.");
+        alert("Open timetable first.");
         return;
       }
       var rows = collectRows(type);
@@ -4191,7 +4594,7 @@
       btnSave.textContent = "Saving…";
       KVSheets.sheetsCall("saveTimetableEditorData", {
         entityType: type,
-        teacherCode: teacherCode,
+        teacherCode: type === "teacher" ? entityName : "",
         rows: rows,
       })
         .then(function (res) {
@@ -4206,8 +4609,11 @@
         });
     });
 
-    typeSel.addEventListener("change", toggleTeacherField);
-    toggleTeacherField();
+    setModeButtonState("");
+    resetEditorUi();
+    prefetchEditorData();
+    window.__prefetchSettingsTimetableEditor = prefetchEditorData;
+    window.__resetSettingsTimetableEditor = resetEditorUi;
   }
 
   function wireEvents() {
@@ -4730,38 +5136,61 @@
     document.getElementById("fileImport").addEventListener("change", function (e) {
       var f = e.target.files && e.target.files[0];
       if (!f) return;
+      function applyImportedRecords(recs) {
+        if (!recs.length) {
+          alert("No rows found in file.");
+          return;
+        }
+        if (!confirm("Replace all current data with this file? (" + recs.length + " rows)")) return;
+        var list = [];
+        var nid = 1;
+        for (var i = 0; i < recs.length; i++) {
+          var o = rowFromImport(recs[i]);
+          o.isActive = true;
+          o.id = nid++;
+          list.push(o);
+        }
+        var check = hasDuplicateAdmnNos(list);
+        if (!check.ok) {
+          alert("Import failed: " + check.error);
+          return;
+        }
+        students = list;
+        saveStudents(students);
+        refreshUI();
+        alert("Imported " + students.length + " students.");
+      }
+
+      var isExcel = /\.(xlsx|xls)$/i.test(String(f.name || ""));
       var reader = new FileReader();
       reader.onload = function () {
         try {
-          var recs = parseCSV(String(reader.result));
-          if (!recs.length) {
-            alert("No rows found in CSV.");
-            return;
+          if (isExcel) {
+            if (!window.XLSX) throw new Error("XLSX library missing.");
+            var wb = window.XLSX.read(new Uint8Array(reader.result), { type: "array" });
+            var sheetName = wb.Sheets["Data Entry"] ? "Data Entry" : wb.SheetNames[0];
+            var ws = wb.Sheets[sheetName];
+            if (!ws) throw new Error("No readable sheet found in workbook.");
+            var recsX = window.XLSX.utils.sheet_to_json(ws, { defval: "", raw: false });
+            var recs = recsX.filter(function (row) {
+              var keys = Object.keys(row || {});
+              for (var i = 0; i < keys.length; i++) {
+                if (String(row[keys[i]] != null ? row[keys[i]] : "").trim()) return true;
+              }
+              return false;
+            });
+            applyImportedRecords(recs);
+          } else {
+            var recsCsv = parseCSV(String(reader.result));
+            applyImportedRecords(recsCsv);
           }
-          if (!confirm("Replace all current data with this file? (" + recs.length + " rows)")) return;
-          var list = [];
-          var nid = 1;
-          for (var i = 0; i < recs.length; i++) {
-            var o = rowFromImport(recs[i]);
-            o.isActive = true;
-            o.id = nid++;
-            list.push(o);
-          }
-          var check = hasDuplicateAdmnNos(list);
-          if (!check.ok) {
-            alert("Import failed: " + check.error);
-            return;
-          }
-          students = list;
-          saveStudents(students);
-          refreshUI();
-          alert("Imported " + students.length + " students.");
         } catch (err) {
           alert("Import failed: " + err.message);
         }
         e.target.value = "";
       };
-      reader.readAsText(f, "UTF-8");
+      if (isExcel) reader.readAsArrayBuffer(f);
+      else reader.readAsText(f, "UTF-8");
     });
 
     document.getElementById("btnExportFull").addEventListener("click", function () {
@@ -4776,11 +5205,130 @@
       window.KVReports.downloadExcel("Full student export", data);
     });
 
-    document.getElementById("btnClearData").addEventListener("click", function () {
-      if (!confirm("Clear all data from this browser?")) return;
-      localStorage.removeItem(STORAGE_KEY);
-      students = [];
-      refreshUI();
+    document.getElementById("btnDownloadCsvTemplate").addEventListener("click", function () {
+      if (!window.XLSX) {
+        alert("Template export requires XLSX library. Refresh the page and try again.");
+        return;
+      }
+      var wb = window.XLSX.utils.book_new();
+      var wsInstructions = window.XLSX.utils.aoa_to_sheet(buildTemplateInstructionRows());
+      var wsData = window.XLSX.utils.aoa_to_sheet([HEADERS.slice()]);
+      window.XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+      window.XLSX.utils.book_append_sheet(wb, wsData, "Data Entry");
+      window.XLSX.writeFile(wb, "students_bulk_template.xlsx");
+    });
+
+    var signInBtn = document.getElementById("btnAccountSignIn");
+    var signOutBtn = document.getElementById("btnAccountSignOut");
+    if (signInBtn) {
+      signInBtn.addEventListener("click", function () {
+        if (window.AndroidAccount && typeof window.AndroidAccount.signIn === "function") {
+          window.AndroidAccount.signIn();
+        } else {
+          alert("Google Sign-In is available in Android app mode.");
+        }
+      });
+    }
+    if (signOutBtn) {
+      signOutBtn.addEventListener("click", function () {
+        if (window.AndroidAccount && typeof window.AndroidAccount.signOut === "function") {
+          window.AndroidAccount.signOut();
+        } else {
+          setCurrentUserKey("guest");
+          location.reload();
+        }
+      });
+    }
+    window.__kvOnAndroidAccountChanged = function (jsonString) {
+      var info = {};
+      try {
+        info = jsonString ? JSON.parse(String(jsonString)) : {};
+      } catch (_e) {}
+      setCurrentUserKey(preferredAccountKey(info));
+      updateAccountUiLine();
+      location.reload();
+    };
+
+    document.getElementById("btnCheckDriveAuth").addEventListener("click", function () {
+      if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+        alert("Configure Google Sheets web app URL first.");
+        return;
+      }
+      KVSheets.sheetsCall("checkDriveAuthorization", {})
+        .then(function (res) {
+          if (res.authorized) {
+            alert("Drive authorization is active.");
+          } else {
+            alert("Drive authorization is not granted yet. Please authorize in Apps Script once.");
+          }
+        })
+        .catch(function (e) {
+          alert("Authorization check failed: " + (e && e.message ? e.message : String(e)));
+        });
+    });
+
+    document.getElementById("btnBackupDrive").addEventListener("click", function () {
+      if (!requireSignedInForDrive()) return;
+      if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+        alert("Configure Google Sheets web app URL first.");
+        return;
+      }
+      var snapshot = collectLocalDatasetSnapshot();
+      KVSheets.sheetsCall("backupDriveJson", { snapshot: snapshot, source: "manual", userKey: currentUserKey() })
+        .then(function (res) {
+          setDailyBackupMeta({
+            ymd: ymdTodayLocal(),
+            fileId: String((res && res.fileId) || ""),
+            savedAt: String((res && res.savedAt) || new Date().toISOString()),
+          });
+          alert("Backup completed to Google Drive.");
+        })
+        .catch(function (e) {
+          alert("Backup failed: " + (e && e.message ? e.message : String(e)));
+        });
+    });
+
+    document.getElementById("btnRestoreDrive").addEventListener("click", function () {
+      if (!requireSignedInForDrive()) return;
+      if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+        alert("Configure Google Sheets web app URL first.");
+        return;
+      }
+      if (!confirm("Restore latest Google Drive backup and replace current local dataset?")) return;
+      KVSheets.sheetsCall("getLatestDriveBackup", { userKey: currentUserKey() })
+        .then(function (res) {
+          applyLocalDatasetSnapshot(res.snapshot || {});
+          students = loadStudents();
+          refreshUI();
+          rebuildMarksExamSelectOptions();
+          rebuildMarksSubjectSelectForExam("");
+          updateMarksPickerUI();
+          alert("Backup restored successfully.");
+        })
+        .catch(function (e) {
+          alert("Restore failed: " + (e && e.message ? e.message : String(e)));
+        });
+    });
+
+    document.getElementById("btnSyncTeacherMarks").addEventListener("click", function () {
+      if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+        alert("Configure Google Sheets web app URL first.");
+        return;
+      }
+      var localMarks = loadMarksheets();
+      fetchAllSheetMarkRecords()
+        .then(function (sheetMarks) {
+          var merged = mergeMarksByLatest(localMarks, sheetMarks);
+          saveMarksheets(merged);
+          rebuildMarksExamSelectOptions();
+          var mex = document.getElementById("marksExam");
+          rebuildMarksSubjectSelectForExam(mex ? mex.value : "");
+          updateMarksPickerUI();
+          alert("Teacher marks sync completed. Local: " + localMarks.length + ", Sheets: " + sheetMarks.length + ", Final: " + merged.length);
+        })
+        .catch(function (e) {
+          alert("Teacher marks sync failed: " + (e && e.message ? e.message : String(e)));
+        });
     });
 
     document.querySelectorAll(".tab").forEach(function (tab) {
@@ -4810,7 +5358,7 @@
           continue;
         }
         if (inp) o[h] = String(inp.value || "").trim();
-        if (h === "DOA" || h === "Date Of Birth") {
+        if (h === "Date of Admission" || h === "Date Of Birth") {
           var dmy = normalizeDateToDmy(o[h]);
           if (o[h] && !dmy) {
             setAddFieldError(h, "Use dd/mm/yyyy or calendar.");
@@ -4820,20 +5368,20 @@
         }
       }
       if (hasError) return;
-      if (!String(o["R.NO."] || "").trim()) {
-        setAddFieldError("R.NO.", "R.NO. is required.");
+      if (!String(o["R. No."] || "").trim()) {
+        setAddFieldError("R. No.", "R. No. is required.");
         return;
       }
       if (!o["Student Name"]) {
         setAddFieldError("Student Name", "Student Name is required.");
         return;
       }
-      if (!normalizeAdmnNo(o["Admn No"])) {
-        setAddFieldError("Admn No", "Admn No is required.");
+      if (!normalizeAdmnNo(o["Admission No."])) {
+        setAddFieldError("Admission No.", "Admission No. is required.");
         return;
       }
-      if (admnNoExists(students, o["Admn No"], null)) {
-        setAddFieldError("Admn No", "Admn No already exists.");
+      if (admnNoExists(students, o["Admission No."], null)) {
+        setAddFieldError("Admission No.", "Admission No. already exists.");
         return;
       }
       if (o["Mobile No"] && (!isDigitsOnly(o["Mobile No"]) || String(o["Mobile No"]).length !== 10)) {
@@ -4879,7 +5427,7 @@
         }
         o.id = students[eidx].id;
         o.isActive = students[eidx].isActive !== false;
-        o["Admn No"] = students[eidx]["Admn No"];
+        o["Admission No."] = students[eidx]["Admission No."];
         students[eidx] = o;
         saveStudents(students);
       } else {
@@ -4897,7 +5445,7 @@
       if (!wasEditing && window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl()) {
         KVSheets.sheetsCall("addStudentToMaster", { row: rowForSheet })
           .then(function () {
-            removeStudentAddPending(o["Admn No"]);
+            removeStudentAddPending(o["Admission No."]);
             pullSheetsIntoApp({ silent: true });
           })
           .catch(function () {
@@ -5099,17 +5647,24 @@
 
   function init() {
     applyKvBranding();
+    setCurrentUserKey(preferredAccountKey(currentAccountInfo()));
     students = loadStudents();
     buildHeaderSelects();
     buildAddForm();
     wireEvents();
+    updateAccountUiLine();
     refreshUI();
     rebuildMarksExamSelectOptions();
     rebuildMarksSubjectSelectForExam("");
     updateMarksEntryToggleRowState();
     wireSheetsReconnectSync();
     startForegroundSheetPolling();
-    pullSheetsIntoApp({ silent: true });
+    pullSheetsIntoApp({ silent: true }).finally(function () {
+      if (typeof window.__prefetchSettingsTimetableEditor === "function") {
+        window.__prefetchSettingsTimetableEditor();
+      }
+      tryAutoDriveBackupDaily();
+    });
     try {
       if (typeof window.__kvPrefetchTimetables === "function") window.__kvPrefetchTimetables();
     } catch (_e) {}

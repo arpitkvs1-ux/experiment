@@ -7,8 +7,8 @@ export function filteredStudentNames(students, category, subCategory) {
   }
   const nameKey = "Student Name";
   const catKey = "Category";
-  const admnCatKey = "Admn Category";
-  const houseKey = "house";
+  const admnCatKey = "KV Category";
+  const houseKey = "House";
   const genderKey = "Gender";
   const minorityKey = "Minority";
   const sgcKey = "Single Girl Child";
@@ -17,7 +17,7 @@ export function filteredStudentNames(students, category, subCategory) {
   const names = [];
   for (const s of students) {
     let isMatch = false;
-    if (category === "QUOTA") {
+  if (category === "ADMISSION QUOTA" || category === "QUOTA") {
       if (subCategory === "SGC" && String(s[sgcKey] || "").trim().toUpperCase() === "YES") isMatch = true;
       else if (subCategory === "RTE" && String(s[rteKey] || "").trim().toUpperCase() === "YES") isMatch = true;
     } else if (category === "SOCIAL CAT") {
@@ -88,7 +88,7 @@ export function studentProfile(students, studentName) {
 
 /** Skip empty sheet rows (no roll / no name), same idea as custom report. */
 function isDataStudentRow(s) {
-  if (String(s["R.NO."] ?? "").trim()) return true;
+  if (String(s["R. No."] ?? "").trim()) return true;
   if (String(s["Student Name"] ?? "").trim()) return true;
   return false;
 }
@@ -180,14 +180,14 @@ export function categoryEnrollmentSummary(students) {
 
 /** Admission category: gender-wise + total. */
 export function admissionCategorySummary(students) {
-  return genderWiseSummary(students, "Admn Category", "Admn Category");
+  return genderWiseSummary(students, "KV Category", "KV Category");
 }
 
 export function customReportRows(students, selectedIndices) {
   const headers = selectedIndices.map((i) => HEADERS[i]).filter(Boolean);
   const out = [headers];
   for (const s of students) {
-    if (!String(s["R.NO."] ?? s["Student Name"] ?? "").trim()) continue;
+    if (!String(s["R. No."] ?? s["Student Name"] ?? "").trim()) continue;
     out.push(selectedIndices.map((i) => (HEADERS[i] != null ? String(s[HEADERS[i]] ?? "") : "")));
   }
   return out;

@@ -86,7 +86,7 @@
                   <label class="field">
                     <span>Category</span>
                     <select id="dashCat">
-                      <option>QUOTA</option>
+                      <option>ADMISSION QUOTA</option>
                       <option>SOCIAL CAT</option>
                       <option selected>HOUSE</option>
                       <option>KV CAT</option>
@@ -388,12 +388,12 @@
                   <table class="data-table compact" id="manageTable">
                     <thead>
                       <tr>
-                        <th>R.NO.</th>
+                        <th>R. No.</th>
                         <th>Name</th>
-                        <th>Admn No</th>
+                        <th>Admission No.</th>
                         <th>Status</th>
                         <th>Edit</th>
-                        <th></th>
+                        <th>Action</th>
                       </tr>
                     </thead>
                     <tbody></tbody>
@@ -429,48 +429,55 @@
           <section id="view-settings" class="app-view" data-view="settings" hidden>
             <div class="card">
               <div class="card-head-row">
-                <h2 class="card-title">Data &amp; import / export</h2>
+                <h2 class="card-title">Download and Bulk Upload</h2>
                 <button
                   type="button"
                   class="btn outline sm js-instructions-open"
                   data-instr-template="instr-tpl-settings"
-                  data-instr-title="Data &amp; import / export"
+                  data-instr-title="Download and Bulk Upload"
                 >
                   Instructions
                 </button>
               </div>
               <div class="settings-actions btn-row">
+                <button type="button" class="btn outline" id="btnAccountSignIn">Sign in with Google</button>
+                <button type="button" class="btn outline" id="btnAccountSignOut">Sign out</button>
+                <span class="card-desc small" id="settingsAccountLine">Account: Guest (local only)</span>
+              </div>
+              <div class="settings-actions btn-row">
                 <label class="btn outline" style="display: inline-block; margin: 0">
-                  <input type="file" id="fileImport" accept=".csv,text/csv" style="display: none" />
-                  Import CSV
+                  <input type="file" id="fileImport" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display: none" />
+                  Upload bulk file
                 </label>
-                <button type="button" class="btn outline" id="btnExportFull">Export all (Excel)</button>
-                <button type="button" class="btn outline" id="btnClearData">Clear data</button>
+                <button type="button" class="btn outline" id="btnExportFull">Download Students Data</button>
+                <button type="button" class="btn outline" id="btnDownloadCsvTemplate">Download template (Excel)</button>
+                <button type="button" class="btn outline" id="btnCheckDriveAuth">Check Drive authorization</button>
+                <button type="button" class="btn outline" id="btnBackupDrive">Backup data to Google Drive</button>
+                <button type="button" class="btn outline" id="btnRestoreDrive">Import backup from Google Drive</button>
+                <button type="button" class="btn outline" id="btnSyncTeacherMarks">Sync teacher marks from Sheets</button>
               </div>
             </div>
             <div class="card">
-              <h2 class="card-title">Timetable editor</h2>
-              <p class="card-desc small">Edit class and teacher timetable directly in Google Sheets database.</p>
+              <h2 class="card-title">Set Time Table</h2>
+              <p class="card-desc small">Open class or teacher timetable, edit cells, then save.</p>
               <div class="row">
-                <label class="field">
-                  <span>Type</span>
-                  <select id="settingsTimetableType">
-                    <option value="class">Class timetable</option>
-                    <option value="teacher">Teacher timetable</option>
-                  </select>
-                </label>
-                <label class="field" id="settingsTeacherCodeWrap" hidden>
-                  <span>Teacher code</span>
-                  <input type="text" id="settingsTeacherCode" placeholder="e.g. TGT WE" />
-                </label>
-                <button type="button" class="btn outline" id="btnSettingsTimetableLoad">Load timetable</button>
-                <button type="button" class="btn success" id="btnSettingsTimetableSave">Save timetable</button>
+                <button type="button" class="btn outline" id="btnSettingsClassTimetable">Class Time Table</button>
+                <button type="button" class="btn outline" id="btnSettingsTeacherTimetable">Teacher's Time Table</button>
               </div>
-              <div class="table-scroll">
+              <div class="row">
+                <label class="field" id="settingsEntityNameWrap" hidden>
+                  <span id="settingsEntityNameLabel">Class</span>
+                  <input type="text" id="settingsEntityNameInput" placeholder="" />
+                </label>
+              </div>
+              <div class="table-scroll" id="settingsTimetableGridWrap" hidden>
                 <table class="data-table compact timetable-editor-table" id="settingsTimetableTable">
                   <thead id="settingsTimetableHead"></thead>
                   <tbody id="settingsTimetableBody"></tbody>
                 </table>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn success" id="btnSettingsTimetableSave" hidden>Save timetable</button>
               </div>
             </div>
           </section>
@@ -484,7 +491,7 @@
         <li>Query and report outputs (Excel / PDF) work from the same actions as before.</li>
         <li>
           <strong>Sync with Google Sheets</strong> on Home pulls the <strong>Master</strong> tab (students) and the marks slip list from your deployed web app. The same pull runs when you open the app, when the device goes back online, and periodically while you use the dashboard (not on the Setup guide screen) so edits by others appear automatically. Column names should match the sheet (e.g.
-          <code>Student Name</code>, <code>house</code>). Interval: <code>KV_SHEETS_FOREGROUND_POLL_MS</code> in <code>sheets-webapp-config.js</code> (default 45s; set <code>-1</code> or <code>false</code> to turn off auto-refresh).
+          <code>Student Name</code>, <code>House</code>). Interval: <code>KV_SHEETS_FOREGROUND_POLL_MS</code> in <code>sheets-webapp-config.js</code> (default 45s; set <code>-1</code> or <code>false</code> to turn off auto-refresh).
         </li>
       </ul>
     </template>
@@ -493,7 +500,7 @@
       <ul class="app-instr-list">
         <li>Filters follow the same rules as the sheet dashboard; all lookups use your <strong>current local data</strong>.</li>
         <li>
-          <strong>Dashboard filter</strong> — pick a category (QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY), then a sub category, and <strong>Show list</strong>.
+          <strong>Dashboard filter</strong> — pick a category (ADMISSION QUOTA, SOCIAL CAT, HOUSE, KV CAT, GENDER, MINORITY), then a sub category, and <strong>Show list</strong>.
         </li>
         <li><strong>Student &amp; column</strong> — choose a student and a column to see that field’s value.</li>
         <li><strong>List by field</strong> — pick a header and value to list matching students.</li>
@@ -566,7 +573,7 @@
         <li><strong>Records</strong> — browse and delete rows from your local master list (synced from <strong>Master</strong> when Sheets is connected).</li>
         <li><strong>Add student</strong> — <strong>Student Name</strong> is required; other fields are optional.</li>
         <li>
-          Optional <strong>Photo</strong> column (before <strong>REMARK</strong> in the sheet): shown as an image only in <strong>Queries → Student detail</strong> (when you pick the Photo column), <strong>Student profile</strong>, and <strong>Custom report</strong> when that column is included.
+          Optional <strong>Photo</strong> column (before <strong>Remark</strong> in the sheet): shown as an image only in <strong>Queries → Student detail</strong> (when you pick the Photo column), <strong>Student profile</strong>, and <strong>Custom report</strong> when that column is included.
         </li>
       </ul>
     </template>
@@ -574,9 +581,14 @@
     <template id="instr-tpl-settings">
       <ul class="app-instr-list">
         <li>Students load from the <strong>Master</strong> tab when you open the app, tap <strong>Sync with Google Sheets</strong>, go back online, or from automatic foreground refresh (every <code>KV_SHEETS_FOREGROUND_POLL_MS</code> while you use the app, except on Setup) — if the web app URL is configured and the sheet is reachable.</li>
-        <li><strong>Import CSV</strong> — use for a one-off restore or offline copy; column headers should match your master sheet.</li>
-        <li><strong>Export all (Excel)</strong> — downloads the current local database.</li>
-        <li><strong>Clear data</strong> — removes local student data (confirm before proceeding).</li>
+        <li><strong>Upload bulk file</strong> — import student rows from CSV/Excel template.</li>
+        <li><strong>Download template (Excel)</strong> gives a 2-sheet bulk-upload template: first sheet has clean instructions, second sheet is data entry only.</li>
+        <li><strong>Download Students Data</strong> — downloads the current local student database.</li>
+        <li><strong>Sign in with Google</strong> — activates independent per-user dataset on this device and Drive backup namespace.</li>
+        <li><strong>Backup data to Google Drive</strong> — manual full local dataset backup in Drive JSON.</li>
+        <li><strong>Import backup from Google Drive</strong> — restore latest Drive JSON backup into local app data.</li>
+        <li><strong>Check Drive authorization</strong> — verifies whether Drive scope is authorized before backup/restore.</li>
+        <li><strong>Sync teacher marks from Sheets</strong> — pull teacher-entered marks and merge by latest timestamp.</li>
       </ul>
     </template>
 
@@ -588,7 +600,7 @@
             <p>Create a new Google Spreadsheet. Add two tabs named exactly <strong>Master</strong> and <strong>Marks</strong> (capital M).</p>
             <p>
               On <strong>Master</strong>, row 1 must be your student column headers — same names you use in CSV / this app (e.g.
-              <code>R.NO.</code>, <code>Student Name</code>, <code>house</code>, …). Data starts row 2. The app syncs this tab into local storage.
+              <code>R. No.</code>, <code>Student Name</code>, <code>House</code>, …). Data starts row 2. The app syncs this tab into local storage.
             </p>
             <p>
               The <strong>Marks</strong> tab is filled by the Apps Script backend (slip rows). You do not need to create headers by hand; the script can create them on first save.

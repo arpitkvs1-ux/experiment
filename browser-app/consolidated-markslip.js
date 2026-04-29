@@ -69,7 +69,7 @@
   }
 
   function persistId(st) {
-    return String(st["R.NO."] != null ? st["R.NO."] : "").trim();
+    return String(st["R. No."] != null ? st["R. No."] : "").trim();
   }
 
   function studentName(st) {

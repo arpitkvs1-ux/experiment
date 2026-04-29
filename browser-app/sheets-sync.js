@@ -35,6 +35,7 @@
     return fetch(url, {
       method: "POST",
       mode: "cors",
+      credentials: "include",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: action, payload: payload || {} }),
     })
@@ -56,6 +57,9 @@
         try {
           data = JSON.parse(text);
         } catch (e) {
+          if (/accounts\.google\.com|sign in|serviceLogin|consent/i.test(String(text || ""))) {
+            throw new Error("Please sign in to your Google account and authorize the app, then try again.");
+          }
           throw new Error(shortSheetsError(text, 120));
         }
         if (!data.ok) {

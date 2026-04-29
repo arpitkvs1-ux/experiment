@@ -844,7 +844,7 @@
       }
 
       function isDataStudentRow(s) {
-        if (String(s["R.NO."] != null ? s["R.NO."] : "").trim() !== "") return true;
+        if (String(s["R. No."] != null ? s["R. No."] : "").trim() !== "") return true;
         if (String(s["Student Name"] != null ? s["Student Name"] : "").trim() !== "") return true;
         return false;
       }
@@ -855,8 +855,8 @@
           if (isDataStudentRow(list[i])) out.push(list[i]);
         }
         out.sort(function (a, b) {
-          var sa = String(a["R.NO."] != null ? a["R.NO."] : "").trim();
-          var sb = String(b["R.NO."] != null ? b["R.NO."] : "").trim();
+          var sa = String(a["R. No."] != null ? a["R. No."] : "").trim();
+          var sb = String(b["R. No."] != null ? b["R. No."] : "").trim();
           var na = parseFloat(sa.replace(/[^\d.]/g, ""));
           var nb = parseFloat(sb.replace(/[^\d.]/g, ""));
           if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
@@ -866,7 +866,7 @@
       }
 
       function marksStudentPersistId(st) {
-        return String(st["R.NO."] != null ? st["R.NO."] : "").trim();
+        return String(st["R. No."] != null ? st["R. No."] : "").trim();
       }
 
       function marksStudentDomKey(st) {
@@ -1027,7 +1027,7 @@
         var record = window.__tmEditRecord || null;
         for (var i = 0; i < list.length; i++) {
           var st = list[i];
-          var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
+          var roll = String(st["R. No."] != null ? st["R. No."] : "").trim() || "—";
           var nm = String(st["Student Name"] || "").trim() || "—";
           var key = marksStudentDomKey(st);
           var tr = document.createElement("tr");
@@ -1411,7 +1411,7 @@
             tmShowAlertMessage(v.error === "EMPTY" ? v.emptyMsg : v.error);
             return;
           }
-          var roll = String(st["R.NO."] != null ? st["R.NO."] : "").trim() || "—";
+          var roll = String(st["R. No."] != null ? st["R. No."] : "").trim() || "—";
           var nm = String(st["Student Name"] || "").trim() || "—";
           entries.push({
             studentId: marksStudentPersistId(st),

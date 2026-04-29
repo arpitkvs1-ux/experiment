@@ -2,13 +2,17 @@ package com.kvnitagartala.studentapp
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.webkit.JavascriptInterface
+import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,6 +21,13 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.webkit.WebViewAssetLoader
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import org.json.JSONObject
 
 /**
  * Local KV student dashboard: same UI/logic as browser-app (HTML/CSS/JS in assets).
@@ -25,7 +36,11 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var assetLoader: WebViewAssetLoader
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private lateinit var googleSignInClient: GoogleSignInClient
+    private var currentGoogleAccount: GoogleSignInAccount? = null
+    private val RC_GOOGLE_SIGN_IN = 8801
 
     private val filePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         val cb = filePathCallback
@@ -84,6 +99,14 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .build()
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
+        currentGoogleAccount = GoogleSignIn.getLastSignedInAccount(this)
+        assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -96,6 +119,8 @@ class MainActivity : AppCompatActivity() {
             settings.displayZoomControls = false
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
             addJavascriptInterface(
                 ExportBridge(this@MainActivity) { mime, name, bytes ->
@@ -103,8 +128,13 @@ class MainActivity : AppCompatActivity() {
                 },
                 "AndroidExport"
             )
+            addJavascriptInterface(AndroidAccountBridge(), "AndroidAccount")
 
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    return assetLoader.shouldInterceptRequest(request.url)
+                }
+
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     return false
                 }
@@ -121,7 +151,7 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
             }
-            loadUrl("file:///android_asset/browser-app/index.html")
+            loadUrl("https://appassets.androidplatform.net/assets/browser-app/index.html")
         }
         setContentView(webView)
 
@@ -138,5 +168,67 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != RC_GOOGLE_SIGN_IN) return
+        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            currentGoogleAccount = account
+            notifyAccountChanged()
+        } catch (_e: Exception) {
+            notifyAccountChanged()
+        }
+    }
+
+    private fun accountJsonString(): String {
+        val account = currentGoogleAccount
+        val obj = JSONObject()
+        if (account != null) {
+            obj.put("signedIn", true)
+            obj.put("email", account.email ?: "")
+            obj.put("displayName", account.displayName ?: "")
+            obj.put("id", account.id ?: "")
+        } else {
+            obj.put("signedIn", false)
+            obj.put("email", "")
+            obj.put("displayName", "")
+            obj.put("id", "")
+        }
+        return obj.toString()
+    }
+
+    private fun notifyAccountChanged() {
+        val escaped = JSONObject.quote(accountJsonString())
+        webView.post {
+            webView.evaluateJavascript(
+                "window.__kvOnAndroidAccountChanged && window.__kvOnAndroidAccountChanged($escaped);",
+                null
+            )
+        }
+    }
+
+    inner class AndroidAccountBridge {
+        @JavascriptInterface
+        fun getCurrentAccountJson(): String = accountJsonString()
+
+        @JavascriptInterface
+        fun signIn() {
+            runOnUiThread {
+                startActivityForResult(googleSignInClient.signInIntent, RC_GOOGLE_SIGN_IN)
+            }
+        }
+
+        @JavascriptInterface
+        fun signOut() {
+            runOnUiThread {
+                googleSignInClient.signOut().addOnCompleteListener {
+                    currentGoogleAccount = null
+                    notifyAccountChanged()
+                }
+            }
+        }
     }
 }
