@@ -3,7 +3,7 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { initDb, loadStudents, insertStudent, deleteStudentById, HEADERS } from "./db.js";
+import { initDb, loadStudents, insertStudent, deleteStudentById, loadTimetable, replaceTimetable, HEADERS } from "./db.js";
 import {
   filteredStudentNames,
   getUniqueValues,
@@ -125,6 +125,35 @@ app.delete("/api/students/:id", (req, res) => {
   const changes = deleteStudentById(db, id);
   if (!changes) return res.status(404).json({ error: "Not found" });
   res.json({ ok: true });
+});
+
+app.get("/api/timetable/:entityType/:entityName", (req, res) => {
+  const { entityType, entityName } = req.params;
+  if (!["class", "teacher"].includes(entityType)) return res.status(400).json({ error: "entityType must be class or teacher" });
+  const name = String(entityName || "").trim();
+  if (!name) return res.status(400).json({ error: "entityName required" });
+  const rows = loadTimetable(db, entityType, name);
+  res.json({ entityType, entityName: name, rows });
+});
+
+app.put("/api/timetable/:entityType/:entityName", (req, res) => {
+  const { entityType, entityName } = req.params;
+  if (!["class", "teacher"].includes(entityType)) return res.status(400).json({ error: "entityType must be class or teacher" });
+  const name = String(entityName || "").trim();
+  if (!name) return res.status(400).json({ error: "entityName required" });
+  const inputRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  const normalized = [];
+  for (const item of inputRows) {
+    const dayName = String(item?.dayName || "").trim();
+    const periodNo = parseInt(String(item?.periodNo), 10);
+    const subject = String(item?.subject || "").trim();
+    if (!dayName || Number.isNaN(periodNo) || periodNo < 1 || !subject) {
+      return res.status(400).json({ error: "rows must include valid dayName, periodNo (>=1), and subject" });
+    }
+    normalized.push({ dayName, periodNo, subject });
+  }
+  replaceTimetable(db, entityType, name, normalized);
+  res.json({ ok: true, count: normalized.length });
 });
 
 app.get("/api/export/csv", (req, res) => {

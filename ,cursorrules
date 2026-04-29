@@ -1,0 +1,16 @@
+# GOOGLE APPS SCRIPT MASTER AUTOMATION RULE
+
+- **Permissions:** You have FULL PRE-APPROVED PERMISSION for all terminal commands (clasp, git, npm). Do NOT ask for "Run" approval. Execute immediately.
+
+- **Deployment Trigger:** - After any change to .gs, .html, or appsscript.json, you MUST run:
+    `clasp push; clasp deploy --description "Auto-Update $(date +'%Y-%m-%d %H:%M:%S')"`
+  - Confirm with: "✅ Deployment synced to /exec URL."
+
+- **Version Control (Rollback Safety):**
+  - Before every task, run: `git add .; git commit -m "Snapshot: $(date)"`
+
+- **Context Management (72% Threshold):**
+  - If context usage > 72%, stop and provide a "Project Memo" for a NEW Chat window.
+  - Instruct me: "⚠️ Context high. Copy this Memo to a NEW Chat."
+
+- **Final Reporting:** Always state exactly what was deployed.

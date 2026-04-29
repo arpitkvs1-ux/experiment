@@ -38,6 +38,12 @@ export const api = {
   report: (indices) => req("/api/report", { method: "POST", body: JSON.stringify({ indices }) }),
   addStudent: (row) => req("/api/students", { method: "POST", body: JSON.stringify({ row }) }),
   deleteStudent: (id) => req(`/api/students/${id}`, { method: "DELETE" }),
+  getTimetable: (entityType, entityName) => req(`/api/timetable/${encodeURIComponent(entityType)}/${encodeURIComponent(entityName)}`),
+  saveTimetable: (entityType, entityName, rows) =>
+    req(`/api/timetable/${encodeURIComponent(entityType)}/${encodeURIComponent(entityName)}`, {
+      method: "PUT",
+      body: JSON.stringify({ rows }),
+    }),
   exportCsvUrl: (indices) => {
     const q = indices && indices.length ? `?indices=${indices.join(",")}` : "";
     return `${base}/api/export/csv${q}`;

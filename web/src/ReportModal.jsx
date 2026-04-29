@@ -1,5 +1,6 @@
 import React from "react";
 import { downloadReportExcel, downloadReportPdf } from "./reportExport.js";
+import { photoUrlFromMasterCell } from "./photoUrl.js";
 
 export function ReportModal({ title, data, onClose }) {
   if (!data || !data.length) return null;
@@ -30,13 +31,42 @@ export function ReportModal({ title, data, onClose }) {
               </tr>
             </thead>
             <tbody>
-              {body.map((row, ri) => (
-                <tr key={ri}>
-                  {row.map((cell, ci) => (
-                    <td key={ci}>{cell === "" ? "—" : cell}</td>
-                  ))}
-                </tr>
-              ))}
+              {body.map((row, ri) => {
+                const isProfileKV =
+                  headers.length === 2 && headers[0] === "Property" && headers[1] === "Information";
+                return (
+                  <tr key={ri}>
+                    {row.map((cell, ci) => {
+                      const prop0 = String(row[0]).trim();
+                      const hdrName = String(headers[ci]).trim();
+                      const url =
+                        photoUrlFromMasterCell(cell) &&
+                        ((isProfileKV && ci === 1 && /^photo$/i.test(prop0)) ||
+                          (!isProfileKV && /^photo$/i.test(hdrName)))
+                          ? photoUrlFromMasterCell(cell)
+                          : "";
+                      if (url) {
+                        return (
+                          <td key={ci}>
+                            <img
+                              className="report-modal-photo-thumb"
+                              src={url}
+                              alt=""
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const td = e.currentTarget.parentElement;
+                                if (td) td.textContent = "—";
+                              }}
+                            />
+                          </td>
+                        );
+                      }
+                      return <td key={ci}>{cell === "" ? "—" : cell}</td>;
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -20,6 +20,17 @@ export function getDb() {
       row_json TEXT NOT NULL
     );
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS timetables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT NOT NULL,
+      entity_name TEXT NOT NULL,
+      day_name TEXT NOT NULL,
+      period_no INTEGER NOT NULL,
+      subject_value TEXT NOT NULL,
+      UNIQUE(entity_type, entity_name, day_name, period_no)
+    );
+  `);
   return db;
 }
 
@@ -69,6 +80,32 @@ export function insertStudent(db, rowObj) {
 export function deleteStudentById(db, id) {
   const info = db.prepare("DELETE FROM students WHERE id = ?").run(id);
   return info.changes;
+}
+
+export function loadTimetable(db, entityType, entityName) {
+  return db
+    .prepare(
+      `SELECT day_name AS dayName, period_no AS periodNo, subject_value AS subject
+       FROM timetables
+       WHERE entity_type = ? AND entity_name = ?
+       ORDER BY day_name, period_no`
+    )
+    .all(entityType, entityName);
+}
+
+export function replaceTimetable(db, entityType, entityName, rows) {
+  const del = db.prepare("DELETE FROM timetables WHERE entity_type = ? AND entity_name = ?");
+  const ins = db.prepare(
+    `INSERT INTO timetables (entity_type, entity_name, day_name, period_no, subject_value)
+     VALUES (?, ?, ?, ?, ?)`
+  );
+  const tx = db.transaction((list) => {
+    del.run(entityType, entityName);
+    for (const row of list) {
+      ins.run(entityType, entityName, row.dayName, row.periodNo, row.subject);
+    }
+  });
+  tx(rows);
 }
 
 export { csvPath, HEADERS };

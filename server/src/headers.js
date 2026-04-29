@@ -29,6 +29,7 @@ export const HEADERS = [
   "PEN",
   "Reimbursement Claimed",
   "Total Quarterly Fee",
+  "Photo",
   "REMARK",
 ];
 

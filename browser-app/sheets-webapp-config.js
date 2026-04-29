@@ -5,7 +5,7 @@
  * School branding: shown in the dashboard, exports, and should match CONFIG in Code.gs
  * (SCHOOL_NAME / SCHOOL_CLASS) for the teacher marks page + PDFs.
  */
-window.KV_SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbztKmjEvzGxCfun9TVzwr0o6HPjU2fzL_vDFfByqefJhd410q8V2en3xCZnH3lD-CkX/exec";
+window.KV_SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzailLBARF73Fet7ppuHKWXGzr3yMYTCY130kTq0ErC5X4SVECjCYz4OwMMDfjQlTBN/exec";
 
 /**
  * While the dashboard tab is visible (any screen except Setup guide), pull Master + marks slip list

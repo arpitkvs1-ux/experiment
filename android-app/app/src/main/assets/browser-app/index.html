@@ -391,7 +391,8 @@
                         <th>R.NO.</th>
                         <th>Name</th>
                         <th>Admn No</th>
-                        <th>House</th>
+                        <th>Status</th>
+                        <th>Edit</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -402,7 +403,7 @@
               <div id="panelAdd" hidden>
                 <form id="formAdd" class="add-form">
                   <div class="form-grid" id="addFormGrid"></div>
-                  <button type="submit" class="btn success">Add to database</button>
+                  <button type="submit" class="btn success" id="btnAddStudentSubmit">Add to database</button>
                 </form>
               </div>
             </section>
@@ -445,6 +446,31 @@
                 </label>
                 <button type="button" class="btn outline" id="btnExportFull">Export all (Excel)</button>
                 <button type="button" class="btn outline" id="btnClearData">Clear data</button>
+              </div>
+            </div>
+            <div class="card">
+              <h2 class="card-title">Timetable editor</h2>
+              <p class="card-desc small">Edit class and teacher timetable directly in Google Sheets database.</p>
+              <div class="row">
+                <label class="field">
+                  <span>Type</span>
+                  <select id="settingsTimetableType">
+                    <option value="class">Class timetable</option>
+                    <option value="teacher">Teacher timetable</option>
+                  </select>
+                </label>
+                <label class="field" id="settingsTeacherCodeWrap" hidden>
+                  <span>Teacher code</span>
+                  <input type="text" id="settingsTeacherCode" placeholder="e.g. TGT WE" />
+                </label>
+                <button type="button" class="btn outline" id="btnSettingsTimetableLoad">Load timetable</button>
+                <button type="button" class="btn success" id="btnSettingsTimetableSave">Save timetable</button>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table compact timetable-editor-table" id="settingsTimetableTable">
+                  <thead id="settingsTimetableHead"></thead>
+                  <tbody id="settingsTimetableBody"></tbody>
+                </table>
               </div>
             </div>
           </section>

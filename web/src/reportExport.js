@@ -6,6 +6,15 @@ const SCHOOL = "Kendriya Vidyalaya NIT Agartala";
 const CLASS_PREFIX = "Class VI - ";
 const MAROON = [107, 28, 46];
 const SUBTITLE_RGB = [217, 48, 37];
+const DOWNLOADED_POPUP_MSG = "Downloaded \uD83D\uDE0A";
+
+function notifyDownloadedPopup() {
+  if (typeof window !== "undefined" && typeof window.KV_showOkDialog === "function") {
+    window.KV_showOkDialog(DOWNLOADED_POPUP_MSG);
+  } else if (typeof window !== "undefined") {
+    window.alert(DOWNLOADED_POPUP_MSG);
+  }
+}
 
 export function safeFilePart(title) {
   const t = (title || "Student_Report").toString().replace(/["']/g, "").trim();
@@ -61,6 +70,7 @@ export function downloadReportExcel(title, data) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Report");
   XLSX.writeFile(wb, `KV_Report_${safeFilePart(title)}.xlsx`);
+  notifyDownloadedPopup();
 }
 
 export function downloadReportPdf(title, data) {
@@ -116,4 +126,5 @@ export function downloadReportPdf(title, data) {
   });
 
   doc.save(`KV_Report_${safeFilePart(title)}.pdf`);
+  notifyDownloadedPopup();
 }

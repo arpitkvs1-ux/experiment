@@ -455,6 +455,13 @@ body {
   margin-top: 8px;
 }
 
+.timetable-editor-table input {
+  min-width: 108px;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
 .top-bar {
   display: flex;
   align-items: flex-start;

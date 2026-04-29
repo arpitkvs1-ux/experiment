@@ -4,6 +4,8 @@
   var STORAGE_KEY = "kv_studentapp_v1";
   var MARKS_STORAGE_KEY = "kv_marksheets_v1";
   var MARKS_PENDING_KEY = "kv_marks_pending_v1";
+  var STUDENT_STATUS_PENDING_KEY = "kv_student_status_pending_v1";
+  var STUDENT_ADD_PENDING_KEY = "kv_student_add_pending_v1";
   var CONS_STATUS_CACHE_KEY = "kv_cons_status_cache_v1";
   var CONS_ABSENT_CACHE_KEY = "kv_cons_absent_cache_v1";
   var SHEET_SLIP_DETAIL_CACHE_KEY = "kv_sheet_slip_detail_cache_v1";
@@ -57,6 +59,51 @@
     "Photo",
     "REMARK",
   ];
+  var COMMON_FIELD_PRESETS = {
+    Gender: ["Boy", "Girl"],
+    Category: ["SC", "ST", "OBC(CL)", "OBC(NCL)", "GEN", "EWS"],
+    "Admn Category": ["GEN", "RTE", "SGC", "SERVICE", "NON-SERVICE"],
+    "Single Girl Child": ["YES", "NO"],
+    RTE: ["YES", "NO"],
+    Minority: ["YES", "NO"],
+    QUOTA: ["SGC", "RTE", "NONE"],
+    house: ["Tagore", "Gandhi", "Nehru", "Ashoka"],
+    BG: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+    "Reimbursement Claimed": ["YES", "NO"],
+  };
+  var ADD_FORM_FIELD_CONFIG = {
+    "R.NO.": { type: "text", required: true },
+    "Adm Year": { type: "yearSelect" },
+    "Admn No": { type: "text", required: true },
+    DOA: { type: "dateText" },
+    "Student Name": { type: "text", required: true },
+    house: { type: "select" },
+    "Date Of Birth": { type: "dateText" },
+    Gender: { type: "select" },
+    Category: { type: "select" },
+    "Admn Category": { type: "select" },
+    "Mothers Name": { type: "text" },
+    "Mobile No": { type: "text" },
+    "M OCCUPATION": { type: "text" },
+    "Fathers Name": { type: "text" },
+    "F OCCUPATION": { type: "text" },
+    ADDRESS: { type: "text" },
+    "ADMISSION CLASS": { type: "text" },
+    QUOTA: { type: "select" },
+    BG: { type: "select" },
+    "Single Girl Child": { type: "select", options: ["YES", "NO", "NA"] },
+    RTE: { type: "select" },
+    Minority: { type: "select" },
+    "Email ID": { type: "text" },
+    "UBI ID": { type: "text" },
+    "Aadhar Card No": { type: "text" },
+    "APPAR ID": { type: "text" },
+    PEN: { type: "text" },
+    "Reimbursement Claimed": { type: "select" },
+    "Total Quarterly Fee": { type: "text" },
+    Photo: { type: "photo" },
+    REMARK: { type: "text" },
+  };
 
   /** Raw Photo field from row (sheet header may be Photo / photo). */
   function studentPhotoRawFromRow(st) {
@@ -179,6 +226,163 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   }
 
+  function isStudentActive(st) {
+    return !(st && st.isActive === false);
+  }
+
+  function activeStudentsOnly(list) {
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      if (isStudentActive(list[i])) out.push(list[i]);
+    }
+    return out;
+  }
+
+  function attendanceEntryKey(rollNo, studentName) {
+    var r = String(rollNo != null ? rollNo : "").trim().toLowerCase();
+    var n = String(studentName != null ? studentName : "").trim().toLowerCase();
+    return r + "::" + n;
+  }
+
+  function activeAttendanceKeySetFromStudents(list) {
+    var set = {};
+    var active = activeStudentsOnly(list || []);
+    for (var i = 0; i < active.length; i++) {
+      set[attendanceEntryKey(active[i]["R.NO."], active[i]["Student Name"])] = true;
+    }
+    return set;
+  }
+
+  function filterAttendanceEntriesToActive(entries, list) {
+    var keySet = activeAttendanceKeySetFromStudents(list || []);
+    var out = [];
+    var src = Array.isArray(entries) ? entries : [];
+    for (var i = 0; i < src.length; i++) {
+      var e = src[i] || {};
+      if (keySet[attendanceEntryKey(e.rollNo, e.studentName)]) out.push(e);
+    }
+    return out;
+  }
+
+  function normalizeAdmnNo(v) {
+    return String(v != null ? v : "")
+      .trim()
+      .toUpperCase();
+  }
+
+  function hasDuplicateAdmnNos(list) {
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var admn = normalizeAdmnNo(list[i] && list[i]["Admn No"]);
+      if (!admn) return { ok: false, error: 'Missing "Admn No" in one or more rows.' };
+      if (seen[admn]) return { ok: false, error: 'Duplicate "Admn No" found: ' + admn };
+      seen[admn] = true;
+    }
+    return { ok: true };
+  }
+
+  function admnNoExists(list, admnNo, ignoreId) {
+    var want = normalizeAdmnNo(admnNo);
+    if (!want) return false;
+    for (var i = 0; i < list.length; i++) {
+      var st = list[i] || {};
+      if (ignoreId != null && Number(st.id) === Number(ignoreId)) continue;
+      if (normalizeAdmnNo(st["Admn No"]) === want) return true;
+    }
+    return false;
+  }
+
+  function commonFieldOptions(header, list) {
+    var h = String(header || "");
+    var preset = COMMON_FIELD_PRESETS[h] || [];
+    var seen = {};
+    var out = [];
+    var i;
+    for (i = 0; i < preset.length; i++) {
+      var pv = String(preset[i] != null ? preset[i] : "").trim();
+      if (!pv) continue;
+      var pk = pv.toLowerCase();
+      if (seen[pk]) continue;
+      seen[pk] = true;
+      out.push(pv);
+    }
+    var src = Array.isArray(list) ? list : [];
+    for (i = 0; i < src.length; i++) {
+      var v = String(src[i] && src[i][h] != null ? src[i][h] : "").trim();
+      if (!v) continue;
+      var k = v.toLowerCase();
+      if (seen[k]) continue;
+      seen[k] = true;
+      out.push(v);
+    }
+    return out;
+  }
+
+  function isDigitsOnly(s) {
+    return /^\d+$/.test(String(s || "").trim());
+  }
+
+  function normalizeDateToDmy(v) {
+    var s = String(v || "").trim();
+    if (!s) return "";
+    var m1 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m1) {
+      var d1 = parseInt(m1[1], 10);
+      var mo1 = parseInt(m1[2], 10);
+      var y1 = parseInt(m1[3], 10);
+      var dt1 = new Date(y1, mo1 - 1, d1);
+      if (dt1.getFullYear() === y1 && dt1.getMonth() === mo1 - 1 && dt1.getDate() === d1) return s;
+      return null;
+    }
+    var m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m2) {
+      var y2 = parseInt(m2[1], 10);
+      var mo2 = parseInt(m2[2], 10);
+      var d2 = parseInt(m2[3], 10);
+      var dt2 = new Date(y2, mo2 - 1, d2);
+      if (dt2.getFullYear() !== y2 || dt2.getMonth() !== mo2 - 1 || dt2.getDate() !== d2) return null;
+      return (d2 < 10 ? "0" : "") + d2 + "/" + (mo2 < 10 ? "0" : "") + mo2 + "/" + y2;
+    }
+    var d3 = new Date(s);
+    if (!isNaN(d3.getTime())) {
+      var d = d3.getDate();
+      var m = d3.getMonth() + 1;
+      var y = d3.getFullYear();
+      return (d < 10 ? "0" : "") + d + "/" + (m < 10 ? "0" : "") + m + "/" + y;
+    }
+    return null;
+  }
+
+  function normalizeStudentDateFields(row) {
+    if (!row || typeof row !== "object") return row;
+    var keys = ["DOA", "Date Of Birth"];
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var raw = String(row[k] != null ? row[k] : "").trim();
+      if (!raw) {
+        row[k] = "";
+        continue;
+      }
+      var dmy = normalizeDateToDmy(raw);
+      row[k] = dmy || "";
+    }
+    return row;
+  }
+
+  function normalizeStudentsDateFields(list) {
+    var changed = false;
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i] || {};
+      var beforeDoa = String(row.DOA != null ? row.DOA : "");
+      var beforeDob = String(row["Date Of Birth"] != null ? row["Date Of Birth"] : "");
+      normalizeStudentDateFields(row);
+      if (beforeDoa !== String(row.DOA != null ? row.DOA : "") || beforeDob !== String(row["Date Of Birth"] != null ? row["Date Of Birth"] : "")) {
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function loadMarksheets() {
     try {
       var raw = localStorage.getItem(MARKS_STORAGE_KEY);
@@ -209,6 +413,96 @@
     try {
       localStorage.setItem(MARKS_PENDING_KEY, JSON.stringify(Array.isArray(list) ? list : []));
     } catch (_e) {}
+  }
+
+  function loadStudentStatusPending() {
+    try {
+      var raw = localStorage.getItem(STUDENT_STATUS_PENDING_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function saveStudentStatusPending(list) {
+    try {
+      localStorage.setItem(STUDENT_STATUS_PENDING_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    } catch (_e) {}
+  }
+
+  function upsertStudentStatusPending(admnNo, isActive) {
+    var key = normalizeAdmnNo(admnNo);
+    if (!key) return;
+    var q = loadStudentStatusPending();
+    var next = [];
+    var replaced = false;
+    for (var i = 0; i < q.length; i++) {
+      var it = q[i] || {};
+      if (normalizeAdmnNo(it.admnNo) === key) {
+        next.push({ admnNo: key, isActive: !!isActive });
+        replaced = true;
+      } else {
+        next.push(it);
+      }
+    }
+    if (!replaced) next.push({ admnNo: key, isActive: !!isActive });
+    saveStudentStatusPending(next);
+  }
+
+  function removeStudentStatusPending(admnNo) {
+    var key = normalizeAdmnNo(admnNo);
+    var q = loadStudentStatusPending();
+    q = q.filter(function (it) {
+      return normalizeAdmnNo((it || {}).admnNo) !== key;
+    });
+    saveStudentStatusPending(q);
+  }
+
+  function loadStudentAddPending() {
+    try {
+      var raw = localStorage.getItem(STUDENT_ADD_PENDING_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function saveStudentAddPending(list) {
+    try {
+      localStorage.setItem(STUDENT_ADD_PENDING_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    } catch (_e) {}
+  }
+
+  function upsertStudentAddPending(studentRow) {
+    if (!studentRow || typeof studentRow !== "object") return;
+    var admnNo = normalizeAdmnNo(studentRow["Admn No"]);
+    if (!admnNo) return;
+    var q = loadStudentAddPending();
+    var next = [];
+    var replaced = false;
+    for (var i = 0; i < q.length; i++) {
+      var it = q[i] || {};
+      if (normalizeAdmnNo(it["Admn No"]) === admnNo) {
+        next.push(studentRow);
+        replaced = true;
+      } else {
+        next.push(it);
+      }
+    }
+    if (!replaced) next.push(studentRow);
+    saveStudentAddPending(next);
+  }
+
+  function removeStudentAddPending(admnNo) {
+    var key = normalizeAdmnNo(admnNo);
+    var q = loadStudentAddPending().filter(function (it) {
+      return normalizeAdmnNo((it || {})["Admn No"]) !== key;
+    });
+    saveStudentAddPending(q);
   }
 
   function loadObjectCache(key) {
@@ -392,6 +686,7 @@
   function studentsForMarksEntry(list) {
     var out = [];
     for (var i = 0; i < list.length; i++) {
+      if (!isStudentActive(list[i])) continue;
       if (isDataStudentRow(list[i])) out.push(list[i]);
     }
     out.sort(function (a, b) {
@@ -800,6 +1095,8 @@
 
   var _studentsSyncPromise = null;
   var _onlineSyncDebounceTimer = null;
+  var _editingStudentId = null;
+  var _suppressEditResetOnce = false;
 
   function normalizeStudentsFromSheetApi(list) {
     if (!Array.isArray(list)) return [];
@@ -812,6 +1109,17 @@
         if (Object.prototype.hasOwnProperty.call(s, k) && k !== "id") o[k] = s[k];
       }
       o.id = i + 1;
+      var statusRaw = "";
+      if (o.Status != null && String(o.Status).trim() !== "") statusRaw = String(o.Status).trim();
+      else if (o["Student Status"] != null && String(o["Student Status"]).trim() !== "") statusRaw = String(o["Student Status"]).trim();
+      else if (o.IsActive != null && String(o.IsActive).trim() !== "") statusRaw = String(o.IsActive).trim();
+      else if (o.Active != null && String(o.Active).trim() !== "") statusRaw = String(o.Active).trim();
+      if (!statusRaw) o.isActive = true;
+      else {
+        var sx = String(statusRaw).trim().toLowerCase();
+        o.isActive = !(sx === "deactivated" || sx === "inactive" || sx === "false" || sx === "0" || sx === "no" || sx === "off");
+      }
+      normalizeStudentDateFields(o);
       out.push(o);
     }
     return out;
@@ -829,6 +1137,28 @@
         if (!list.length) {
           if (opts && opts.silent) console.warn("Master sync: no rows returned; keeping local list.");
           return false;
+        }
+        var check = hasDuplicateAdmnNos(list);
+        if (!check.ok) {
+          if (opts && opts.silent) console.warn("Master sync rejected:", check.error);
+          else alert(check.error + " Sync skipped; local data unchanged.");
+          return false;
+        }
+        var pending = loadStudentStatusPending();
+        if (pending.length) {
+          var map = {};
+          for (var pi = 0; pi < pending.length; pi++) {
+            var p = pending[pi] || {};
+            var k = normalizeAdmnNo(p.admnNo);
+            if (!k) continue;
+            map[k] = p.isActive !== false;
+          }
+          for (var li = 0; li < list.length; li++) {
+            var ak = normalizeAdmnNo(list[li] && list[li]["Admn No"]);
+            if (ak && Object.prototype.hasOwnProperty.call(map, ak)) {
+              list[li].isActive = !!map[ak];
+            }
+          }
         }
         students = list;
         saveStudents(students);
@@ -912,6 +1242,69 @@
     return next();
   }
 
+  function retryPendingStudentStatusInBackground() {
+    if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+      return Promise.resolve(false);
+    }
+    var q = loadStudentStatusPending();
+    if (!q.length) return Promise.resolve(false);
+    var i = 0;
+    function next() {
+      if (i >= q.length) return Promise.resolve(true);
+      var item = q[i++] || {};
+      var admnNo = normalizeAdmnNo(item.admnNo);
+      if (!admnNo) return next();
+      return KVSheets.sheetsCall("setStudentActiveStatus", { admnNo: admnNo, isActive: item.isActive !== false })
+        .then(function () {
+          removeStudentStatusPending(admnNo);
+        })
+        .catch(function () {})
+        .then(next);
+    }
+    return next();
+  }
+
+  function retryPendingStudentAddsInBackground() {
+    if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+      return Promise.resolve(false);
+    }
+    var q = loadStudentAddPending();
+    if (!q.length) return Promise.resolve(false);
+    var i = 0;
+    function next() {
+      if (i >= q.length) return Promise.resolve(true);
+      var row = q[i++] || {};
+      var admnNo = normalizeAdmnNo(row["Admn No"]);
+      if (!admnNo) return next();
+      return KVSheets.sheetsCall("addStudentToMaster", { row: row })
+        .then(function () {
+          removeStudentAddPending(admnNo);
+        })
+        .catch(function () {})
+        .then(next);
+    }
+    return next();
+  }
+
+  function isAddStudentEntryActive() {
+    var studentsView = document.getElementById("view-students");
+    if (!studentsView || studentsView.hidden) return false;
+    var panelAdd = document.getElementById("panelAdd");
+    if (!panelAdd || panelAdd.hidden) return false;
+    var form = document.getElementById("formAdd");
+    if (!form) return false;
+    var nodes = form.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.type === "file") {
+        if (n.files && n.files.length) return true;
+      } else if (String(n.value || "").trim()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function getForegroundPollIntervalMs() {
     try {
       var raw = window.KV_SHEETS_FOREGROUND_POLL_MS;
@@ -972,10 +1365,13 @@
     var silent = !!opts.silent;
     return Promise.all([
       retryPendingMarksInBackground(),
+      retryPendingStudentAddsInBackground(),
+      retryPendingStudentStatusInBackground(),
       syncStudentsFromSheets({ silent: silent }),
       syncMarkSlipsListFromSheets({ silent: silent }),
       refreshMarksEntryPolicyFromServer({ silent: silent }),
     ]).finally(function () {
+      if (isAddStudentEntryActive()) return;
       refreshUI();
       syncMarksEntryToggleFromCache();
       updateMarksEntryToggleRowState();
@@ -1700,18 +2096,98 @@
 
   function refreshUI() {
     students = loadStudents();
-    fillNameSelects();
+    if (normalizeStudentsDateFields(students)) saveStudents(students);
+    var activeStudents = activeStudentsOnly(students);
+    buildAddForm();
+    fillNameSelects(activeStudents);
     fillManageTable();
-    updateDashSub();
-    updateSec2Sub();
+    updateDashSub(activeStudents);
+    updateSec2Sub(activeStudents);
     renderColCheckboxes();
     var rc = document.getElementById("recordCount");
     if (rc) rc.textContent = String(students.length);
     var hc = document.getElementById("homeRecordCount");
-    if (hc) hc.textContent = String(students.length);
+    if (hc) hc.textContent = String(activeStudents.length);
     if (!isMarksEntryActive()) {
       renderMarksStudentTable();
     }
+  }
+
+  function openStudentEditFormById(id) {
+    var idx = -1;
+    for (var i = 0; i < students.length; i++) {
+      if (Number(students[i].id) === Number(id)) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx < 0) return;
+    _editingStudentId = Number(id);
+    var st = students[idx];
+    normalizeStudentDateFields(st);
+    var submitBtn = document.getElementById("btnAddStudentSubmit");
+    if (submitBtn) submitBtn.textContent = "Modify record";
+    var addTabBtn = document.querySelector('.tab[data-tab="add"]');
+    if (addTabBtn) addTabBtn.textContent = "Modify record";
+    var addTab = document.querySelector('.tab[data-tab="add"]');
+    _suppressEditResetOnce = true;
+    if (addTab) addTab.click();
+    if (!window.__addPhotoDataByHeader) window.__addPhotoDataByHeader = {};
+    window.__addPhotoDataByHeader.Photo = String(st.Photo || "").trim();
+    for (var hi = 0; hi < HEADERS.length; hi++) {
+      var h = HEADERS[hi];
+      if (h === "Photo") continue;
+      var el = document.getElementById("add_" + fieldId(h));
+      if (!el) continue;
+      var vv = String(st[h] != null ? st[h] : "");
+      if (h === "DOA" || h === "Date Of Birth") vv = normalizeDateToDmy(vv) || "";
+      el.value = vv;
+    }
+    var admnEl = document.getElementById("add_" + fieldId("Admn No"));
+    if (admnEl) admnEl.disabled = true;
+    syncSingleGirlChildByGender();
+  }
+
+  function resetStudentFormMode() {
+    _editingStudentId = null;
+    var submitBtn = document.getElementById("btnAddStudentSubmit");
+    if (submitBtn) submitBtn.textContent = "Add to database";
+    var addTabBtn = document.querySelector('.tab[data-tab="add"]');
+    if (addTabBtn) addTabBtn.textContent = "Add student";
+    var admnEl = document.getElementById("add_" + fieldId("Admn No"));
+    if (admnEl) admnEl.disabled = false;
+    var form = document.getElementById("formAdd");
+    if (form) form.reset();
+    if (window.__addPhotoDataByHeader) window.__addPhotoDataByHeader.Photo = "";
+    var photoHint = document.getElementById("add_" + fieldId("Photo") + "_hint");
+    if (photoHint) photoHint.textContent = "Upload JPG";
+    clearAddFormErrors();
+    syncSingleGirlChildByGender();
+  }
+
+  function syncSingleGirlChildByGender() {
+    var gEl = document.getElementById("add_" + fieldId("Gender"));
+    var sgcEl = document.getElementById("add_" + fieldId("Single Girl Child"));
+    if (!gEl || !sgcEl) return;
+    var g = String(gEl.value || "").trim().toLowerCase();
+    if (g === "boy" || g === "male") {
+      sgcEl.value = "NA";
+      sgcEl.disabled = true;
+    } else {
+      sgcEl.disabled = false;
+      if (!sgcEl.value) sgcEl.value = "";
+    }
+  }
+
+  function clearAddFormErrors() {
+    var nodes = document.querySelectorAll("#addFormGrid .add-field-error");
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = "";
+  }
+
+  function setAddFieldError(header, msg) {
+    var el = document.getElementById("add_err_" + fieldId(header));
+    if (!el) return;
+    el.textContent = String(msg || "");
   }
 
   function renderMarksStudentTable() {
@@ -1778,8 +2254,9 @@
     revalidateAllMarksInputs();
   }
 
-  function fillNameSelects() {
-    var names = studentNamesSorted(students);
+  function fillNameSelects(sourceStudents) {
+    var base = Array.isArray(sourceStudents) ? sourceStudents : activeStudentsOnly(students);
+    var names = studentNamesSorted(base);
     var selects = ["sec1Student", "profileStudent"];
     for (var s = 0; s < selects.length; s++) {
       var el = document.getElementById(selects[s]);
@@ -1796,9 +2273,10 @@
     }
   }
 
-  function updateDashSub() {
+  function updateDashSub(sourceStudents) {
+    var base = Array.isArray(sourceStudents) ? sourceStudents : activeStudentsOnly(students);
     var cat = document.getElementById("dashCat").value;
-    var opts = buildSubOptions(cat, students);
+    var opts = buildSubOptions(cat, base);
     var sub = document.getElementById("dashSub");
     var prev = sub.value;
     sub.innerHTML = "";
@@ -1812,14 +2290,15 @@
     else if (opts.length) sub.selectedIndex = 0;
   }
 
-  function updateSec2Sub() {
+  function updateSec2Sub(sourceStudents) {
+    var base = Array.isArray(sourceStudents) ? sourceStudents : activeStudentsOnly(students);
     var col = document.getElementById("sec2Header").value;
     var sub = document.getElementById("sec2SubValue");
     if (!col) {
       sub.innerHTML = '<option value="">— Select header first —</option>';
       return;
     }
-    var vals = getUniqueValues(students, parseInt(col, 10));
+    var vals = getUniqueValues(base, parseInt(col, 10));
     sub.innerHTML = "";
     for (var i = 0; i < vals.length; i++) {
       var o = document.createElement("option");
@@ -1994,22 +2473,54 @@
         "</td><td>" +
         escapeHtml(s["Admn No"] || "—") +
         "</td><td>" +
-        escapeHtml(s.house || "—") +
-        '</td><td><button type="button" class="btn danger sm del-btn" data-id="' +
+        (isStudentActive(s) ? "Active" : "Deactivated") +
+        '</td><td><button type="button" class="btn outline sm edit-btn" data-id="' +
         s.id +
-        '">Delete</button></td>';
+        '">Edit</button>' +
+        '</td><td><button type="button" class="btn outline sm toggle-active-btn" data-id="' +
+        s.id +
+        '">' +
+        (isStudentActive(s) ? "Deactivate" : "Activate") +
+        "</button></td>";
       tbody.appendChild(tr);
     }
-    var dels = tbody.querySelectorAll(".del-btn");
+    var edits = tbody.querySelectorAll(".edit-btn");
+    for (var e = 0; e < edits.length; e++) {
+      edits[e].addEventListener("click", function () {
+        var id = parseInt(this.getAttribute("data-id"), 10);
+        openStudentEditFormById(id);
+      });
+    }
+    var dels = tbody.querySelectorAll(".toggle-active-btn");
     for (var j = 0; j < dels.length; j++) {
       dels[j].addEventListener("click", function () {
         var id = parseInt(this.getAttribute("data-id"), 10);
-        if (!confirm("Delete this student? This cannot be undone.")) return;
-        students = students.filter(function (x) {
-          return x.id !== id;
-        });
+        var idx = -1;
+        for (var i = 0; i < students.length; i++) {
+          if (Number(students[i].id) === Number(id)) {
+            idx = i;
+            break;
+          }
+        }
+        if (idx < 0) return;
+        var nextState = !isStudentActive(students[idx]);
+        students[idx].isActive = nextState;
         saveStudents(students);
         refreshUI();
+        var admnNo = normalizeAdmnNo(students[idx]["Admn No"]);
+        if (!admnNo) return;
+        if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
+          upsertStudentStatusPending(admnNo, nextState);
+          return;
+        }
+        KVSheets.sheetsCall("setStudentActiveStatus", { admnNo: admnNo, isActive: nextState })
+          .then(function () {
+            removeStudentStatusPending(admnNo);
+            pullSheetsIntoApp({ silent: true });
+          })
+          .catch(function () {
+            upsertStudentStatusPending(admnNo, nextState);
+          });
       });
     }
   }
@@ -2051,6 +2562,7 @@
   function wireAppNavigation() {
     document.querySelectorAll(".sidebar-nav .nav-item[data-nav]").forEach(function (btn) {
       btn.addEventListener("click", function () {
+        resetStudentFormMode();
         showAppView(this.getAttribute("data-nav"));
       });
     });
@@ -2109,6 +2621,7 @@
     if (!tabs.length) return;
     tabs.forEach(function (tab) {
       tab.addEventListener("click", function () {
+        resetStudentFormMode();
         var id = this.getAttribute("data-query-tab");
         tabs.forEach(function (t) {
           var on = t === tab;
@@ -2782,7 +3295,7 @@
     }
 
     function renderAttendanceMarkTable(entries) {
-      var list = sortedAttendanceEntries(entries);
+      var list = sortedAttendanceEntries(filterAttendanceEntriesToActive(entries, students));
       tbody.innerHTML = "";
       if (!list.length) {
         panel.hidden = true;
@@ -2950,6 +3463,7 @@
     }
 
     function summaryFromEntries(entries, dayLabel, date) {
+      entries = filterAttendanceEntriesToActive(entries, students);
       var out = {
         dayLabel: dayLabel || date,
         totals: { girls: 0, boys: 0, total: 0 },
@@ -2984,11 +3498,12 @@
         .then(function (res) {
           var cache = loadAttendanceCache();
           var local = cache[date];
+          var filteredEntries = filterAttendanceEntriesToActive((res && res.entries) || [], students);
           if (!(local && local.pending)) {
             cache[date] = {
               date: date,
               dayLabel: res.dayLabel || date,
-              entries: (res && res.entries) || [],
+              entries: filteredEntries,
               marked: !!(res && res.marked),
               synced: true,
               pending: false,
@@ -3015,6 +3530,7 @@
       attendanceEditMode = marked;
       setSubmitLabel();
       var entries = (c && c.entries && c.entries.length) ? c.entries : buildEntriesFromLocalStudents();
+      entries = filterAttendanceEntriesToActive(entries, students);
       renderAttendanceMarkTable(entries);
       setAttendanceStatus((marked ? "Modify mode for " : "Mark attendance for ") + ymdToDmy(currentAttendanceDate) + ".");
       if (hasSheets() && !(c && c.pending)) {
@@ -3514,6 +4030,186 @@
     });
   }
 
+  function wireSettingsTimetableEditor() {
+    var typeSel = document.getElementById("settingsTimetableType");
+    var teacherWrap = document.getElementById("settingsTeacherCodeWrap");
+    var teacherCodeInput = document.getElementById("settingsTeacherCode");
+    var btnLoad = document.getElementById("btnSettingsTimetableLoad");
+    var btnSave = document.getElementById("btnSettingsTimetableSave");
+    var thead = document.getElementById("settingsTimetableHead");
+    var tbody = document.getElementById("settingsTimetableBody");
+    if (!typeSel || !btnLoad || !btnSave || !thead || !tbody) return;
+
+    var ttEditorState = {
+      dayKeys: [],
+      periodLabels: [],
+    };
+
+    function hasSheets() {
+      return !!(window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl());
+    }
+
+    function currentType() {
+      return String(typeSel.value || "class").toLowerCase() === "teacher" ? "teacher" : "class";
+    }
+
+    function currentTeacherCode() {
+      return String((teacherCodeInput && teacherCodeInput.value) || "").trim();
+    }
+
+    function toggleTeacherField() {
+      var isTeacher = currentType() === "teacher";
+      if (teacherWrap) teacherWrap.hidden = !isTeacher;
+    }
+
+    function buildHead(type, periodLabels) {
+      var html = "<tr><th>Day</th>";
+      var i;
+      for (i = 0; i < periodLabels.length; i++) {
+        if (type === "class") {
+          html += "<th>P" + periodLabels[i] + " Subject</th><th>P" + periodLabels[i] + " Teacher</th>";
+        } else {
+          html += "<th>P" + periodLabels[i] + " Class</th><th>P" + periodLabels[i] + " Subject</th>";
+        }
+      }
+      html += "</tr>";
+      thead.innerHTML = html;
+    }
+
+    function buildBody(type, dayKeys, periodLabels, rowsMap) {
+      var html = "";
+      var di, pi;
+      for (di = 0; di < dayKeys.length; di++) {
+        var dayKey = dayKeys[di];
+        html += "<tr><td>" + dayKey + "</td>";
+        for (pi = 0; pi < periodLabels.length; pi++) {
+          var period = periodLabels[pi];
+          var row = rowsMap[dayKey] || {};
+          var cell = row[period] || {};
+          var leftVal = type === "class" ? String(cell.subject || "") : String(cell.clazz || "");
+          var rightVal = type === "class" ? String(cell.teacher || "") : String(cell.subject || "");
+          html +=
+            '<td><input type="text" data-day="' +
+            dayKey +
+            '" data-period="' +
+            period +
+            '" data-part="left" value="' +
+            escapeHtml(leftVal) +
+            '" placeholder="' +
+            (type === "class" ? "Subject" : "Class") +
+            '" /></td>';
+          html +=
+            '<td><input type="text" data-day="' +
+            dayKey +
+            '" data-period="' +
+            period +
+            '" data-part="right" value="' +
+            escapeHtml(rightVal) +
+            '" placeholder="' +
+            (type === "class" ? "Teacher" : "Subject") +
+            '" /></td>';
+        }
+        html += "</tr>";
+      }
+      tbody.innerHTML = html;
+    }
+
+    function collectRows(type) {
+      var rows = [];
+      var di, pi;
+      for (di = 0; di < ttEditorState.dayKeys.length; di++) {
+        var dayKey = ttEditorState.dayKeys[di];
+        var periods = {};
+        for (pi = 0; pi < ttEditorState.periodLabels.length; pi++) {
+          var period = ttEditorState.periodLabels[pi];
+          var leftEl = tbody.querySelector('input[data-day="' + dayKey + '"][data-period="' + period + '"][data-part="left"]');
+          var rightEl = tbody.querySelector('input[data-day="' + dayKey + '"][data-period="' + period + '"][data-part="right"]');
+          var left = String((leftEl && leftEl.value) || "").trim();
+          var right = String((rightEl && rightEl.value) || "").trim();
+          if (type === "class") {
+            periods[period] = { subject: left, teacher: right };
+          } else {
+            periods[period] = { clazz: left, subject: right };
+          }
+        }
+        rows.push({ dayKey: dayKey, periods: periods });
+      }
+      return rows;
+    }
+
+    btnLoad.addEventListener("click", function () {
+      if (!hasSheets()) {
+        alert("Configure the Google Apps Script web app URL in settings first.");
+        return;
+      }
+      var type = currentType();
+      var teacherCode = currentTeacherCode();
+      if (type === "teacher" && !teacherCode) {
+        alert("Enter teacher code first.");
+        return;
+      }
+      btnLoad.disabled = true;
+      var prev = btnLoad.textContent;
+      btnLoad.textContent = "Loading…";
+      KVSheets.sheetsCall("getTimetableEditorData", {
+        entityType: type,
+        teacherCode: teacherCode,
+      })
+        .then(function (res) {
+          ttEditorState.dayKeys = Array.isArray(res.dayKeys) ? res.dayKeys : [];
+          ttEditorState.periodLabels = Array.isArray(res.periodLabels) ? res.periodLabels : [];
+          buildHead(type, ttEditorState.periodLabels);
+          buildBody(type, ttEditorState.dayKeys, ttEditorState.periodLabels, res.rowsMap || {});
+        })
+        .catch(function (e) {
+          alert(formatShortUserMessage(e && e.message ? e.message : e));
+        })
+        .finally(function () {
+          btnLoad.disabled = false;
+          btnLoad.textContent = prev;
+        });
+    });
+
+    btnSave.addEventListener("click", function () {
+      if (!hasSheets()) {
+        alert("Configure the Google Apps Script web app URL in settings first.");
+        return;
+      }
+      var type = currentType();
+      var teacherCode = currentTeacherCode();
+      if (type === "teacher" && !teacherCode) {
+        alert("Enter teacher code first.");
+        return;
+      }
+      if (!ttEditorState.dayKeys.length || !ttEditorState.periodLabels.length) {
+        alert("Load timetable first.");
+        return;
+      }
+      var rows = collectRows(type);
+      btnSave.disabled = true;
+      var prev = btnSave.textContent;
+      btnSave.textContent = "Saving…";
+      KVSheets.sheetsCall("saveTimetableEditorData", {
+        entityType: type,
+        teacherCode: teacherCode,
+        rows: rows,
+      })
+        .then(function (res) {
+          alert("Timetable saved. Updated rows: " + String(res.updatedRows || 0));
+        })
+        .catch(function (e) {
+          alert(formatShortUserMessage(e && e.message ? e.message : e));
+        })
+        .finally(function () {
+          btnSave.disabled = false;
+          btnSave.textContent = prev;
+        });
+    });
+
+    typeSel.addEventListener("change", toggleTeacherField);
+    toggleTeacherField();
+  }
+
   function wireEvents() {
     wireAppNavigation();
     wireInstructionsModal();
@@ -3521,6 +4217,7 @@
     wireConsolidatedSheets();
     wireAttendanceModule();
     wireTimetableModule();
+    wireSettingsTimetableEditor();
 
     var marksEntryToggle = document.getElementById("marksEntryToggle");
     if (marksEntryToggle) {
@@ -3755,9 +4452,10 @@
 
     document.getElementById("dashCat").addEventListener("change", updateDashSub);
     document.getElementById("btnDashFilter").addEventListener("click", function () {
+      var activeStudents = activeStudentsOnly(students);
       var cat = document.getElementById("dashCat").value;
       var sub = document.getElementById("dashSub").value;
-      var r = filteredStudentNames(students, cat, sub);
+      var r = filteredStudentNames(activeStudents, cat, sub);
       if (r.error) {
         alert(r.error);
         return;
@@ -3774,6 +4472,7 @@
     document.getElementById("sec1Student").addEventListener("change", updateDetail);
     document.getElementById("sec1Header").addEventListener("change", updateDetail);
     function updateDetail() {
+      var activeStudents = activeStudentsOnly(students);
       var name = document.getElementById("sec1Student").value;
       var col = document.getElementById("sec1Header").value;
       var box = document.getElementById("detailDisplay");
@@ -3786,9 +4485,9 @@
       if (/^photo$/i.test(String(h || ""))) {
         var row = null;
         var ri;
-        for (ri = 0; ri < students.length; ri++) {
-          if (String(students[ri]["Student Name"] || "").trim() === String(name).trim()) {
-            row = students[ri];
+        for (ri = 0; ri < activeStudents.length; ri++) {
+          if (String(activeStudents[ri]["Student Name"] || "").trim() === String(name).trim()) {
+            row = activeStudents[ri];
             break;
           }
         }
@@ -3820,11 +4519,12 @@
         box.appendChild(wrap);
         return;
       }
-      box.textContent = getSingleValue(students, name, colIdx);
+      box.textContent = getSingleValue(activeStudents, name, colIdx);
     }
 
     document.getElementById("sec2Header").addEventListener("change", updateSec2Sub);
     document.getElementById("btnListGen").addEventListener("click", function () {
+      var activeStudents = activeStudentsOnly(students);
       var col = document.getElementById("sec2Header").value;
       var sub = document.getElementById("sec2SubValue").value;
       var sel = document.getElementById("sec2Header");
@@ -3833,7 +4533,7 @@
         alert("Please select both header and value.");
         return;
       }
-      var matches = filteredListByColumn(students, parseInt(col, 10), sub);
+      var matches = filteredListByColumn(activeStudents, parseInt(col, 10), sub);
       if (!matches.length) {
         alert("No students found.");
         return;
@@ -3845,12 +4545,13 @@
     });
 
     document.getElementById("btnProfile").addEventListener("click", function () {
+      var activeStudents = activeStudentsOnly(students);
       var name = document.getElementById("profileStudent").value;
       if (!name) {
         alert("Please select a student.");
         return;
       }
-      var rows = studentProfile(students, name);
+      var rows = studentProfile(activeStudents, name);
       if (!rows) {
         alert("Student not found.");
         return;
@@ -3860,10 +4561,10 @@
     });
 
     document.getElementById("btnSumCat").addEventListener("click", function () {
-      openModal("Category Enrollment Summary", categoryEnrollmentSummary(students));
+      openModal("Category Enrollment Summary", categoryEnrollmentSummary(activeStudentsOnly(students)));
     });
     document.getElementById("btnSumAdm").addEventListener("click", function () {
-      openModal("Admission Category Enrollment Summary", admissionCategorySummary(students));
+      openModal("Admission Category Enrollment Summary", admissionCategorySummary(activeStudentsOnly(students)));
     });
 
     document.getElementById("btnToggleCols").addEventListener("click", function () {
@@ -3880,15 +4581,17 @@
     });
 
     document.getElementById("btnShowReport").addEventListener("click", function () {
+      var activeStudents = activeStudentsOnly(students);
       var idx = getSelectedIndices();
       if (!idx.length) {
         alert("Select at least one column.");
         return;
       }
-      openModal("Custom Student Report", customReportRows(students, idx));
+      openModal("Custom Student Report", customReportRows(activeStudents, idx));
     });
 
     document.getElementById("btnExportExcel").addEventListener("click", function () {
+      var activeStudents = activeStudentsOnly(students);
       if (!window.KVReports) {
         alert("Export scripts missing. Refresh the page.");
         return;
@@ -3898,10 +4601,11 @@
         alert("Select columns.");
         return;
       }
-      var data = customReportRows(students, idx);
+      var data = customReportRows(activeStudents, idx);
       window.KVReports.downloadExcel("Custom Student Report", data);
     });
     document.getElementById("btnExportPdf").addEventListener("click", function () {
+      var activeStudents = activeStudentsOnly(students);
       if (!window.KVReports) {
         alert("Export scripts missing. Refresh the page.");
         return;
@@ -3911,7 +4615,7 @@
         alert("Select columns.");
         return;
       }
-      var data = customReportRows(students, idx);
+      var data = customReportRows(activeStudents, idx);
       window.KVReports.downloadPdf("Custom Student Report", data);
     });
 
@@ -4039,8 +4743,14 @@
           var nid = 1;
           for (var i = 0; i < recs.length; i++) {
             var o = rowFromImport(recs[i]);
+            o.isActive = true;
             o.id = nid++;
             list.push(o);
+          }
+          var check = hasDuplicateAdmnNos(list);
+          if (!check.ok) {
+            alert("Import failed: " + check.error);
+            return;
           }
           students = list;
           saveStudents(students);
@@ -4062,7 +4772,7 @@
       var idx = HEADERS.map(function (_, i) {
         return i;
       });
-      var data = customReportRows(students, idx);
+      var data = customReportRows(activeStudentsOnly(students), idx);
       window.KVReports.downloadExcel("Full student export", data);
     });
 
@@ -4076,6 +4786,8 @@
     document.querySelectorAll(".tab").forEach(function (tab) {
       tab.addEventListener("click", function () {
         var target = this.getAttribute("data-tab");
+        if (_suppressEditResetOnce) _suppressEditResetOnce = false;
+        else resetStudentFormMode();
         document.querySelectorAll(".tab").forEach(function (t) {
           t.classList.toggle("active", t === tab);
         });
@@ -4086,22 +4798,120 @@
 
     document.getElementById("formAdd").addEventListener("submit", function (e) {
       e.preventDefault();
+      var wasEditing = _editingStudentId != null;
+      clearAddFormErrors();
       var o = emptyRowObject();
+      var hasError = false;
       for (var i = 0; i < HEADERS.length; i++) {
         var h = HEADERS[i];
         var inp = document.getElementById("add_" + fieldId(h));
-        if (inp) o[h] = inp.value.trim();
+        if (h === "Photo") {
+          o[h] = String((window.__addPhotoDataByHeader && window.__addPhotoDataByHeader.Photo) || "").trim();
+          continue;
+        }
+        if (inp) o[h] = String(inp.value || "").trim();
+        if (h === "DOA" || h === "Date Of Birth") {
+          var dmy = normalizeDateToDmy(o[h]);
+          if (o[h] && !dmy) {
+            setAddFieldError(h, "Use dd/mm/yyyy or calendar.");
+            hasError = true;
+          }
+          o[h] = dmy || "";
+        }
       }
-      if (!o["Student Name"]) {
-        alert("Student Name is required.");
+      if (hasError) return;
+      if (!String(o["R.NO."] || "").trim()) {
+        setAddFieldError("R.NO.", "R.NO. is required.");
         return;
       }
-      o.id = nextId(students);
-      students.push(o);
-      saveStudents(students);
+      if (!o["Student Name"]) {
+        setAddFieldError("Student Name", "Student Name is required.");
+        return;
+      }
+      if (!normalizeAdmnNo(o["Admn No"])) {
+        setAddFieldError("Admn No", "Admn No is required.");
+        return;
+      }
+      if (admnNoExists(students, o["Admn No"], null)) {
+        setAddFieldError("Admn No", "Admn No already exists.");
+        return;
+      }
+      if (o["Mobile No"] && (!isDigitsOnly(o["Mobile No"]) || String(o["Mobile No"]).length !== 10)) {
+        setAddFieldError("Mobile No", "Must be exactly 10 digits.");
+        return;
+      }
+      if (o["Email ID"] && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(o["Email ID"]))) {
+        setAddFieldError("Email ID", "Invalid email format.");
+        return;
+      }
+      if (o["UBI ID"] && !isDigitsOnly(o["UBI ID"])) {
+        setAddFieldError("UBI ID", "Numeric only.");
+        return;
+      }
+      if (o["Aadhar Card No"] && (!isDigitsOnly(o["Aadhar Card No"]) || String(o["Aadhar Card No"]).length !== 12)) {
+        setAddFieldError("Aadhar Card No", "Must be exactly 12 digits.");
+        return;
+      }
+      if (o["APPAR ID"] && !isDigitsOnly(o["APPAR ID"])) {
+        setAddFieldError("APPAR ID", "Numeric only.");
+        return;
+      }
+      if (o.PEN && !isDigitsOnly(o.PEN)) {
+        setAddFieldError("PEN", "Numeric only.");
+        return;
+      }
+      if (o["Total Quarterly Fee"] && !/^\d+(\.\d+)?$/.test(String(o["Total Quarterly Fee"]))) {
+        setAddFieldError("Total Quarterly Fee", "Numeric only.");
+        return;
+      }
+      if (String(o.Gender || "").trim().toLowerCase() === "boy") o["Single Girl Child"] = "NA";
+      if (wasEditing) {
+        var eidx = -1;
+        for (var ei = 0; ei < students.length; ei++) {
+          if (Number(students[ei].id) === Number(_editingStudentId)) {
+            eidx = ei;
+            break;
+          }
+        }
+        if (eidx < 0) {
+          setAddFieldError("Student Name", "Student record not found.");
+          return;
+        }
+        o.id = students[eidx].id;
+        o.isActive = students[eidx].isActive !== false;
+        o["Admn No"] = students[eidx]["Admn No"];
+        students[eidx] = o;
+        saveStudents(students);
+      } else {
+        o.isActive = true;
+        o.id = nextId(students);
+        students.push(o);
+        saveStudents(students);
+      }
+      var rowForSheet = {};
+      for (var si = 0; si < HEADERS.length; si++) {
+        var hk = HEADERS[si];
+        rowForSheet[hk] = o[hk] != null ? o[hk] : "";
+      }
+      rowForSheet.Status = "Active";
+      if (!wasEditing && window.KVSheets && typeof KVSheets.getSheetsUrl === "function" && KVSheets.getSheetsUrl()) {
+        KVSheets.sheetsCall("addStudentToMaster", { row: rowForSheet })
+          .then(function () {
+            removeStudentAddPending(o["Admn No"]);
+            pullSheetsIntoApp({ silent: true });
+          })
+          .catch(function () {
+            upsertStudentAddPending(rowForSheet);
+          });
+      } else if (!wasEditing) {
+        upsertStudentAddPending(rowForSheet);
+      }
+      if (window.__addPhotoDataByHeader) window.__addPhotoDataByHeader.Photo = "";
       document.getElementById("formAdd").reset();
+      syncSingleGirlChildByGender();
+      resetStudentFormMode();
       refreshUI();
-      alert("Student added.");
+      alert(wasEditing ? "Student updated." : "Student added.");
       document.querySelector('.tab[data-tab="list"]').click();
     });
   }
@@ -4113,20 +4923,164 @@
   function buildAddForm() {
     var grid = document.getElementById("addFormGrid");
     grid.innerHTML = "";
+    if (!window.__addPhotoDataByHeader) window.__addPhotoDataByHeader = {};
     for (var i = 0; i < HEADERS.length; i++) {
       var h = HEADERS[i];
       var label = document.createElement("label");
       label.className = "field";
       var span = document.createElement("span");
-      span.textContent = h;
-      var input = document.createElement("input");
-      input.type = "text";
-      input.id = "add_" + fieldId(h);
-      input.placeholder = "—";
+      var cfg = ADD_FORM_FIELD_CONFIG[h] || { type: "text" };
+      span.textContent = h + (cfg.required ? " *" : "");
+      var input = null;
+      if (cfg.type === "yearSelect") {
+        input = document.createElement("select");
+        input.id = "add_" + fieldId(h);
+        var empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "— Select —";
+        input.appendChild(empty);
+        for (var y = 2010; y <= 2040; y++) {
+          var op = document.createElement("option");
+          op.value = String(y);
+          op.textContent = String(y);
+          input.appendChild(op);
+        }
+      } else if (cfg.type === "dateText") {
+        var wrap = document.createElement("div");
+        wrap.style.display = "flex";
+        wrap.style.gap = "6px";
+        wrap.style.alignItems = "center";
+        wrap.style.position = "relative";
+        wrap.style.width = "100%";
+        wrap.style.maxWidth = "100%";
+        wrap.style.minWidth = "0";
+        input = document.createElement("input");
+        input.type = "text";
+        input.id = "add_" + fieldId(h);
+        input.placeholder = "dd/mm/yyyy";
+        input.style.flex = "1";
+        input.style.minWidth = "0";
+        var picker = document.createElement("input");
+        picker.type = "date";
+        picker.id = "add_" + fieldId(h) + "_picker";
+        picker.style.position = "absolute";
+        picker.style.inset = "0";
+        picker.style.width = "100%";
+        picker.style.height = "100%";
+        picker.style.opacity = "0";
+        picker.style.pointerEvents = "auto";
+        picker.style.cursor = "pointer";
+        picker.style.zIndex = "2";
+        picker.title = "Pick date";
+        var pickerBtn = document.createElement("button");
+        pickerBtn.type = "button";
+        pickerBtn.className = "btn outline sm";
+        pickerBtn.textContent = "📅";
+        pickerBtn.title = "Pick date";
+        pickerBtn.style.position = "relative";
+        pickerBtn.style.overflow = "hidden";
+        pickerBtn.style.flex = "0 0 auto";
+        pickerBtn.style.zIndex = "3";
+        pickerBtn.appendChild(picker);
+        picker.addEventListener("change", function (e) {
+          var tId = String(e.target.id || "").replace(/_picker$/, "");
+          var t = document.getElementById(tId);
+          if (!t) return;
+          var dmy = normalizeDateToDmy(e.target.value);
+          if (dmy) t.value = dmy;
+        });
+        wrap.appendChild(input);
+        wrap.appendChild(pickerBtn);
+        label.appendChild(span);
+        label.appendChild(wrap);
+        var errDate = document.createElement("span");
+        errDate.className = "card-desc small add-field-error";
+        errDate.id = "add_err_" + fieldId(h);
+        errDate.style.color = "#b91c1c";
+        errDate.textContent = "";
+        label.appendChild(errDate);
+        grid.appendChild(label);
+        continue;
+      } else if (cfg.type === "photo") {
+        var pWrap = document.createElement("div");
+        pWrap.style.display = "flex";
+        pWrap.style.flexDirection = "column";
+        pWrap.style.gap = "6px";
+        input = document.createElement("input");
+        input.type = "file";
+        input.id = "add_" + fieldId(h);
+        input.accept = ".jpg,.jpeg,image/jpeg";
+        var pHint = document.createElement("span");
+        pHint.className = "card-desc small";
+        pHint.id = "add_" + fieldId(h) + "_hint";
+        pHint.textContent = "Upload JPG";
+        input.addEventListener("change", function (e) {
+          var f = e.target.files && e.target.files[0];
+          var hintEl = document.getElementById(e.target.id + "_hint");
+          if (!f) {
+            window.__addPhotoDataByHeader.Photo = "";
+            if (hintEl) hintEl.textContent = "Upload JPG";
+            return;
+          }
+          if (!/\.jpe?g$/i.test(f.name) && !/image\/jpeg/i.test(String(f.type || ""))) {
+            alert("Photo must be JPG/JPEG.");
+            e.target.value = "";
+            window.__addPhotoDataByHeader.Photo = "";
+            if (hintEl) hintEl.textContent = "Upload JPG";
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            window.__addPhotoDataByHeader.Photo = String(reader.result || "");
+            if (hintEl) hintEl.textContent = "Selected: " + f.name;
+          };
+          reader.readAsDataURL(f);
+        });
+        pWrap.appendChild(input);
+        pWrap.appendChild(pHint);
+        label.appendChild(span);
+        label.appendChild(pWrap);
+        var errPhoto = document.createElement("span");
+        errPhoto.className = "card-desc small add-field-error";
+        errPhoto.id = "add_err_" + fieldId(h);
+        errPhoto.style.color = "#b91c1c";
+        errPhoto.textContent = "";
+        label.appendChild(errPhoto);
+        grid.appendChild(label);
+        continue;
+      } else if (cfg.type === "select") {
+        var opts = Array.isArray(cfg.options) ? cfg.options.slice() : commonFieldOptions(h, students);
+        input = document.createElement("select");
+        input.id = "add_" + fieldId(h);
+        var em = document.createElement("option");
+        em.value = "";
+        em.textContent = "— Select —";
+        input.appendChild(em);
+        for (var oi = 0; oi < opts.length; oi++) {
+          var op2 = document.createElement("option");
+          op2.value = String(opts[oi]);
+          op2.textContent = String(opts[oi]);
+          input.appendChild(op2);
+        }
+      } else {
+        input = document.createElement("input");
+        input.type = "text";
+        input.id = "add_" + fieldId(h);
+        input.placeholder = "—";
+      }
       label.appendChild(span);
       label.appendChild(input);
+      var err = document.createElement("span");
+      err.className = "card-desc small add-field-error";
+      err.id = "add_err_" + fieldId(h);
+      err.style.color = "#b91c1c";
+      err.textContent = "";
+      label.appendChild(err);
       grid.appendChild(label);
     }
+    var gEl = document.getElementById("add_" + fieldId("Gender"));
+    if (gEl) gEl.addEventListener("change", syncSingleGirlChildByGender);
+    syncSingleGirlChildByGender();
   }
 
   function buildHeaderSelects() {

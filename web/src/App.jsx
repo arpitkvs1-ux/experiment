@@ -2,9 +2,34 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 import { ReportModal } from "./ReportModal.jsx";
 import { downloadReportExcel, downloadReportPdf } from "./reportExport.js";
+import { photoUrlFromMasterCell } from "./photoUrl.js";
 import "./App.css";
 
 const DASH_CATS = ["QUOTA", "SOCIAL CAT", "HOUSE", "KV CAT", "GENDER", "MINORITY"];
+const TIMETABLE_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const TIMETABLE_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+function StudentPhotoDetail({ raw, loading }) {
+  const url = loading ? "" : photoUrlFromMasterCell(raw);
+  const [ok, setOk] = useState(true);
+  if (loading) return "…";
+  if (!url || !ok) return <span className="muted">—</span>;
+  return (
+    <div className="query-photo-detail-wrap">
+      <img
+        className="query-photo-detail"
+        src={url}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setOk(false)}
+      />
+      <a href={url} target="_blank" rel="noopener noreferrer" className="card-desc small">
+        Open photo link
+      </a>
+    </div>
+  );
+}
 
 function buildSubOptions(category, students, headers) {
   const houseIdx = headers.indexOf("house");
@@ -62,6 +87,10 @@ export default function App() {
 
   const [manageTab, setManageTab] = useState("list");
   const [newRow, setNewRow] = useState({});
+  const [settingsEntityType, setSettingsEntityType] = useState("class");
+  const [settingsEntityName, setSettingsEntityName] = useState("");
+  const [timetableCells, setTimetableCells] = useState({});
+  const [timetableBusy, setTimetableBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setErr(null);
@@ -265,6 +294,54 @@ export default function App() {
     }
   };
 
+  const timetableCellKey = (dayName, periodNo) => `${dayName}__${periodNo}`;
+
+  const loadTimetableFromDb = async () => {
+    const entityName = settingsEntityName.trim();
+    if (!entityName) {
+      alert(`Enter ${settingsEntityType === "class" ? "class" : "teacher"} name/code first.`);
+      return;
+    }
+    setTimetableBusy(true);
+    try {
+      const r = await api.getTimetable(settingsEntityType, entityName);
+      const next = {};
+      for (const row of r.rows || []) {
+        next[timetableCellKey(row.dayName, row.periodNo)] = row.subject || "";
+      }
+      setTimetableCells(next);
+    } catch (e) {
+      alert(e.body?.error || e.message);
+    } finally {
+      setTimetableBusy(false);
+    }
+  };
+
+  const saveTimetableToDb = async () => {
+    const entityName = settingsEntityName.trim();
+    if (!entityName) {
+      alert(`Enter ${settingsEntityType === "class" ? "class" : "teacher"} name/code first.`);
+      return;
+    }
+    const rows = [];
+    for (const dayName of TIMETABLE_DAYS) {
+      for (const periodNo of TIMETABLE_PERIODS) {
+        const subject = String(timetableCells[timetableCellKey(dayName, periodNo)] || "").trim();
+        if (!subject) continue;
+        rows.push({ dayName, periodNo, subject });
+      }
+    }
+    setTimetableBusy(true);
+    try {
+      await api.saveTimetable(settingsEntityType, entityName, rows);
+      alert("Timetable saved.");
+    } catch (e) {
+      alert(e.body?.error || e.message);
+    } finally {
+      setTimetableBusy(false);
+    }
+  };
+
   if (loading && !headers.length) {
     return (
       <div className="app-shell">
@@ -346,7 +423,15 @@ export default function App() {
               ))}
             </select>
           </label>
-          <div className="detail-box">{sec1Val == null ? <span className="muted">Pick student and column</span> : sec1Val}</div>
+          <div className="detail-box">
+            {sec1Val == null ? (
+              <span className="muted">Pick student and column</span>
+            ) : sec1Col !== "" && /^photo$/i.test(String(headers[parseInt(sec1Col, 10)] || "")) ? (
+              <StudentPhotoDetail raw={sec1Val === "…" ? "" : sec1Val} loading={sec1Val === "…"} />
+            ) : (
+              sec1Val
+            )}
+          </div>
         </section>
 
         <section className="card">
@@ -492,6 +577,69 @@ export default function App() {
             </button>
           </form>
         )}
+      </section>
+
+      <section className="card wide">
+        <h2 className="card-title">Settings · Timetable manager</h2>
+        <p className="card-desc small">Edit and update weekly timetable for a class or teacher in the local database.</p>
+        <div className="row">
+          <label className="field">
+            <span>Timetable type</span>
+            <select value={settingsEntityType} onChange={(e) => setSettingsEntityType(e.target.value)}>
+              <option value="class">Class</option>
+              <option value="teacher">Teacher</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>{settingsEntityType === "class" ? "Class name/code" : "Teacher name/code"}</span>
+            <input
+              value={settingsEntityName}
+              onChange={(e) => setSettingsEntityName(e.target.value)}
+              placeholder={settingsEntityType === "class" ? "e.g. VI-A" : "e.g. TCH-ENG-01"}
+            />
+          </label>
+          <button type="button" className="btn outline" onClick={loadTimetableFromDb} disabled={timetableBusy}>
+            Load timetable
+          </button>
+          <button type="button" className="btn success" onClick={saveTimetableToDb} disabled={timetableBusy}>
+            Save timetable
+          </button>
+          <button type="button" className="btn secondary" onClick={() => setTimetableCells({})} disabled={timetableBusy}>
+            Clear grid
+          </button>
+        </div>
+
+        <div className="table-scroll">
+          <table className="data-table compact timetable-editor">
+            <thead>
+              <tr>
+                <th>Day</th>
+                {TIMETABLE_PERIODS.map((p) => (
+                  <th key={p}>P{p}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TIMETABLE_DAYS.map((dayName) => (
+                <tr key={dayName}>
+                  <td>{dayName}</td>
+                  {TIMETABLE_PERIODS.map((periodNo) => {
+                    const key = timetableCellKey(dayName, periodNo);
+                    return (
+                      <td key={key}>
+                        <input
+                          value={timetableCells[key] || ""}
+                          onChange={(e) => setTimetableCells((prev) => ({ ...prev, [key]: e.target.value }))}
+                          placeholder="Subject"
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {modal && <ReportModal title={modal.title} data={modal.data} onClose={() => setModal(null)} />}
