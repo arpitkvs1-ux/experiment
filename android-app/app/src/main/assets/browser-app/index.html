@@ -323,7 +323,9 @@
               <div class="btn-row">
                 <button type="button" class="btn primary" id="btnAttendanceMarkToday">Mark today attendance</button>
                 <button type="button" class="btn outline" id="btnAttendanceAbsentees" hidden>See today absentee list</button>
+                <button type="button" class="btn outline" id="btnAttendanceWhatsApp" hidden>Share absentees on WhatsApp</button>
                 <button type="button" class="btn outline" id="btnAttendanceSummary" hidden>Today's attendance summary</button>
+                <button type="button" class="btn accent" id="btnAttendanceSamagam" hidden>Mark to SAMAGAM</button>
               </div>
               <p class="card-desc small" id="attendanceStatusLine">Status: idle.</p>
               <div id="attendanceMarkPanel" class="attendance-mark-panel" hidden>
@@ -444,6 +446,7 @@
                 <button type="button" class="btn outline" id="btnAccountSignOut">Sign out</button>
                 <span class="card-desc small" id="settingsAccountLine">Account: Guest (local only)</span>
               </div>
+              <p class="card-desc small settings-google-hint" id="settingsGoogleSignInHint" hidden></p>
               <div class="settings-actions btn-row">
                 <label class="btn outline" style="display: inline-block; margin: 0">
                   <input type="file" id="fileImport" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display: none" />
@@ -455,6 +458,64 @@
                 <button type="button" class="btn outline" id="btnBackupDrive">Backup data to Google Drive</button>
                 <button type="button" class="btn outline" id="btnRestoreDrive">Import backup from Google Drive</button>
                 <button type="button" class="btn outline" id="btnSyncTeacherMarks">Sync teacher marks from Sheets</button>
+              </div>
+            </div>
+            <div class="card">
+              <h2 class="card-title">KVS SAMAGAM</h2>
+              <p class="card-desc small">Used by <strong>Mark to SAMAGAM</strong> on the Attendance screen after you submit today's attendance.</p>
+              <div class="form-grid samagam-settings-grid">
+                <label class="field">
+                  <span>SAMAGAM Login ID</span>
+                  <input type="text" id="settingsSamagamUsername" autocomplete="username" placeholder="Login ID" />
+                </label>
+                <label class="field">
+                  <span>SAMAGAM password</span>
+                  <input type="password" id="settingsSamagamPassword" autocomplete="current-password" placeholder="Password" />
+                </label>
+                <label class="field samagam-capture-field">
+                  <span>Attendance capture URL (optional)</span>
+                  <input
+                    type="url"
+                    id="settingsSamagamCaptureUrl"
+                    placeholder="https://samagam.kvs.gov.in/mis/attendance/capture/…"
+                  />
+                </label>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn success" id="btnSaveSamagamSettings">Save SAMAGAM credentials</button>
+              </div>
+            </div>
+            <div class="card">
+              <h2 class="card-title">Parent WhatsApp</h2>
+              <p class="card-desc small">
+                After marking attendance, use <strong>Share absentees on WhatsApp</strong> to inform parents.
+                Message is prefilled — you only tap <strong>Send</strong> in WhatsApp.
+              </p>
+              <div class="form-grid samagam-settings-grid">
+                <label class="field">
+                  <span>Parent group name</span>
+                  <input type="text" id="settingsWhatsAppGroupName" placeholder="e.g. Class VII-A Parents" />
+                </label>
+                <label class="field samagam-capture-field">
+                  <span>Group chat ID (optional)</span>
+                  <input
+                    type="text"
+                    id="settingsWhatsAppGroupJid"
+                    placeholder="120363…@g.us — opens that group directly"
+                    autocapitalize="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                  />
+                </label>
+              </div>
+              <p class="card-desc small settings-google-hint">
+                Save the group name you use in WhatsApp (e.g. <em>Class VII Parents</em>).
+                For one-tap open without picking the group, paste the group chat ID ending in
+                <code>@g.us</code> (from a “WhatsApp Group ID” helper app, or WhatsApp Web). If left blank,
+                Android remembers your group after the first share.
+              </p>
+              <div class="btn-row">
+                <button type="button" class="btn success" id="btnSaveWhatsAppSettings">Save WhatsApp settings</button>
               </div>
             </div>
             <div class="card">
@@ -524,6 +585,7 @@
         <li>If attendance is already marked for today, app asks whether you want to modify it.</li>
         <li><strong>See today absentee list</strong> shows today's absentees in a modal popup.</li>
         <li><strong>Today's attendance summary</strong> shows girls/boys/total for total, present, and absent.</li>
+        <li><strong>Mark to SAMAGAM</strong> — after submit today. Auto: login → capture → fill P/A by <strong>student name</strong> (browser: Tampermonkey script once; Android: in-app WebView). Warns if names missing/extra; you press Submit on SAMAGAM.</li>
       </ul>
     </template>
 
@@ -584,11 +646,18 @@
         <li><strong>Upload bulk file</strong> — import student rows from CSV/Excel template.</li>
         <li><strong>Download template (Excel)</strong> gives a 2-sheet bulk-upload template: first sheet has clean instructions, second sheet is data entry only.</li>
         <li><strong>Download Students Data</strong> — downloads the current local student database.</li>
-        <li><strong>Sign in with Google</strong> — activates independent per-user dataset on this device and Drive backup namespace.</li>
+        <li>
+          <strong>Sign in with Google</strong> — browser: set <code>KV_GOOGLE_WEB_CLIENT_ID</code> in <code>sheets-webapp-config.js</code> (Web OAuth client + authorized origins such as
+          <code>http://localhost:3000</code>). Android app uses native sign-in. Activates a per-user local dataset and Drive backup namespace.
+        </li>
         <li><strong>Backup data to Google Drive</strong> — manual full local dataset backup in Drive JSON.</li>
         <li><strong>Import backup from Google Drive</strong> — restore latest Drive JSON backup into local app data.</li>
         <li><strong>Check Drive authorization</strong> — verifies whether Drive scope is authorized before backup/restore.</li>
         <li><strong>Sync teacher marks from Sheets</strong> — pull teacher-entered marks and merge by latest timestamp.</li>
+        <li>
+          <strong>KVS SAMAGAM</strong> — save Login ID and password under Settings → KVS SAMAGAM. After submitting today's attendance, use
+          <strong>Mark to SAMAGAM</strong> to open SAMAGAM, prefill login, autofill P/A on the capture page, then submit on SAMAGAM manually (captcha + final Submit).
+        </li>
       </ul>
     </template>
 
@@ -641,6 +710,21 @@
               class line where supported.
             </p>
             <p>Set the same values in Apps Script <code>CONFIG.SCHOOL_NAME</code> and <code>CONFIG.SCHOOL_CLASS</code> so the teacher page and PDF slips match.</p>
+          </li>
+          <li>
+            <h3 class="setup-step-title">Google Sign-In (browser testing)</h3>
+            <p>
+              In Google Cloud Console, create an <strong>OAuth 2.0 Web application</strong> client. Under <strong>Authorized JavaScript origins</strong>, add the exact origin you use
+              (e.g. <code>http://localhost:3000</code> — include the port). Copy the client ID into <code>KV_GOOGLE_WEB_CLIENT_ID</code> in
+              <code>sheets-webapp-config.js</code>.
+            </p>
+            <p>
+              Open the dashboard with a local server, not <code>file://</code>: in <code>browser-app/</code> run <code>npm run dev</code>, then open the printed URL →
+              <strong>Settings → Sign in with Google</strong>.
+            </p>
+            <p>
+              For the Android APK, also add an <strong>Android</strong> OAuth client (package <code>com.kvnitagartala.studentapp</code> + signing SHA-1).
+            </p>
           </li>
           <li>
             <h3 class="setup-step-title">After code changes</h3>
@@ -811,6 +895,10 @@
     <script src="vendor/jspdf.plugin.autotable.min.js"></script>
     <script src="vendor/xlsx.full.min.js"></script>
     <script src="sheets-webapp-config.js"></script>
+    <script src="google-signin.js"></script>
+    <script src="samagam-inject.js"></script>
+    <script src="samagam-flow.js"></script>
+    <script src="whatsapp-parents.js"></script>
     <script src="kv-message-dialog.js"></script>
     <script src="export-reports.js"></script>
     <script src="consolidated-markslip.js"></script>

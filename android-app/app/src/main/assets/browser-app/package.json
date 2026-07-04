@@ -1,0 +1,12 @@
+{
+  "name": "vaayu-browser-app",
+  "private": true,
+  "description": "Vaayu student dashboard — local web testing",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "dev:serve": "npx --yes serve . -p 3000",
+    "dev:3001": "set PORT=3001&& node dev-server.mjs",
+    "dev:python": "python -m http.server 3000"
+  }
+}

@@ -1058,9 +1058,15 @@
       if (window.AndroidAccount && typeof window.AndroidAccount.getCurrentAccountJson === "function") {
         var raw = window.AndroidAccount.getCurrentAccountJson();
         var obj = raw ? JSON.parse(String(raw)) : {};
-        return obj && typeof obj === "object" ? obj : {};
+        if (obj && obj.signedIn) return obj;
       }
     } catch (_e) {}
+    try {
+      if (window.KVGoogleSignIn && typeof KVGoogleSignIn.getAccountInfo === "function") {
+        var web = KVGoogleSignIn.getAccountInfo();
+        if (web && web.signedIn) return web;
+      }
+    } catch (_e2) {}
     return { signedIn: false, email: "", displayName: "", id: "" };
   }
 
@@ -1082,10 +1088,31 @@
     } else {
       line.textContent = "Account: Guest (local only)";
     }
+    updateGoogleSignInHint();
+  }
+
+  function updateGoogleSignInHint() {
+    var el = document.getElementById("settingsGoogleSignInHint");
+    if (!el) return;
+    if (window.AndroidAccount && typeof window.AndroidAccount.getCurrentAccountJson === "function") {
+      el.hidden = true;
+      return;
+    }
+    var clientId = String(typeof window.KV_GOOGLE_WEB_CLIENT_ID !== "undefined" ? window.KV_GOOGLE_WEB_CLIENT_ID : "").trim();
+    if (clientId) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.innerHTML =
+      "<strong>Web sign-in setup (one time):</strong> Open " +
+      '<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud → Credentials</a> ' +
+      "(use the same GCP project as your Apps Script). Create an <strong>OAuth client ID</strong> → type <strong>Web application</strong>. " +
+      "Under <strong>Authorized JavaScript origins</strong> add <code>http://localhost:3000</code> (must match the URL in your browser). " +
+      "Copy the client ID into <code>KV_GOOGLE_WEB_CLIENT_ID</code> in <code>sheets-webapp-config.js</code>, save, and hard-refresh this page.";
   }
 
   function requireSignedInForDrive() {
-    if (!(window.AndroidAccount && typeof window.AndroidAccount.getCurrentAccountJson === "function")) return true;
     var info = currentAccountInfo();
     if (info && info.signedIn) return true;
     alert("Please sign in with Google first.");
@@ -1480,8 +1507,14 @@
         return true;
       })
       .catch(function (e) {
-        if (opts && opts.silent) console.warn("Master sync:", e && e.message ? e.message : e);
-        else alert(e.message || String(e));
+        var msg = e && e.message ? e.message : String(e);
+        if (/failed to fetch/i.test(msg)) {
+          msg =
+            "Could not reach Google Sheets (network/CORS). Hard-refresh the page and try Sync again.";
+        }
+        var emptyLocal = !students.length;
+        if (opts && opts.silent && !emptyLocal) console.warn("Master sync:", msg);
+        else alert(msg);
         return false;
       })
       .finally(function () {
@@ -3330,7 +3363,9 @@
   function wireAttendanceModule() {
     var markBtn = document.getElementById("btnAttendanceMarkToday");
     var absBtn = document.getElementById("btnAttendanceAbsentees");
+    var waBtn = document.getElementById("btnAttendanceWhatsApp");
     var sumBtn = document.getElementById("btnAttendanceSummary");
+    var samagamBtn = document.getElementById("btnAttendanceSamagam");
     var monthlyBtn = document.getElementById("btnAttendanceMonthlyReport");
     var submitBtn = document.getElementById("btnAttendanceSubmit");
     var panel = document.getElementById("attendanceMarkPanel");
@@ -3662,7 +3697,44 @@
 
     function setAttendancePostMarkButtonsVisible(markedToday) {
       absBtn.hidden = !markedToday;
+      if (waBtn) waBtn.hidden = !markedToday;
       sumBtn.hidden = !markedToday;
+      if (samagamBtn) samagamBtn.hidden = !markedToday;
+    }
+
+    function todayAbsenteesFromCache(date) {
+      var c = loadAttendanceCache()[date || todayYmd()];
+      if (!(c && c.marked && c.entries && c.entries.length)) return null;
+      return c.entries.filter(function (e) {
+        return String(e.status || "P").toUpperCase() === "A";
+      });
+    }
+
+    function shareTodayAbsenteesOnWhatsApp() {
+      if (!window.KVWhatsAppParents || typeof KVWhatsAppParents.shareOnWhatsApp !== "function") {
+        alert("WhatsApp share is not loaded. Refresh the page.");
+        return;
+      }
+      var err = KVWhatsAppParents.validateBeforeShare();
+      if (err) {
+        alert(err);
+        return;
+      }
+      var date = todayYmd();
+      var absentees = todayAbsenteesFromCache(date);
+      if (absentees === null) {
+        alert("Attendance is not marked yet.");
+        return;
+      }
+      var msg = KVWhatsAppParents.buildAbsenteesMessage(absentees, date);
+      KVWhatsAppParents.shareOnWhatsApp(msg);
+    }
+
+    function todayAttendanceEntriesForSamagam() {
+      var today = todayYmd();
+      var c = loadAttendanceCache()[today];
+      if (!(c && c.marked && c.entries && c.entries.length)) return [];
+      return filterAttendanceEntriesToActive(c.entries, students);
     }
 
     function buildEntriesFromLocalStudents() {
@@ -4074,6 +4146,12 @@
         });
     });
 
+    if (waBtn) {
+      waBtn.addEventListener("click", function () {
+        shareTodayAbsenteesOnWhatsApp();
+      });
+    }
+
     sumBtn.addEventListener("click", function () {
       var date = todayYmd();
       var c = loadAttendanceCache()[date];
@@ -4121,6 +4199,17 @@
           alert("Could not fetch summary right now.");
         });
     });
+
+    if (samagamBtn) {
+      samagamBtn.addEventListener("click", function () {
+        var entries = todayAttendanceEntriesForSamagam();
+        if (!window.KVSamagam || typeof KVSamagam.startFlow !== "function") {
+          alert("SAMAGAM helper is not loaded. Refresh the page.");
+          return;
+        }
+        KVSamagam.startFlow(entries);
+      });
+    }
 
     if (monthlyBtn) {
       monthlyBtn.addEventListener("click", function () {
@@ -4173,6 +4262,14 @@
       window.__kvRunAttendanceBackgroundSync = runAttendanceBackgroundSync;
       window.__kvPrimeAttendanceTodayDraft = primeTodayAttendanceDraftFromStudents;
     } catch (_e) {}
+    if (window.KVSamagam && typeof KVSamagam.checkDevServer === "function") {
+      KVSamagam.checkDevServer().then(function (ok) {
+        if (!ok && statusLine) {
+          statusLine.textContent =
+            "Status: Mark to SAMAGAM needs start-web.bat (Vaayu dev server). Close any npm serve terminal and restart.";
+        }
+      });
+    }
   }
 
   function wireTimetableModule() {
@@ -5220,34 +5317,135 @@
 
     var signInBtn = document.getElementById("btnAccountSignIn");
     var signOutBtn = document.getElementById("btnAccountSignOut");
+    function applyAccountKeyFromInfo(info) {
+      var newKey = preferredAccountKey(info || {});
+      var prevKey = currentUserKey();
+      setCurrentUserKey(newKey);
+      updateAccountUiLine();
+      if (newKey !== prevKey) location.reload();
+    }
+
     if (signInBtn) {
       signInBtn.addEventListener("click", function () {
         if (window.AndroidAccount && typeof window.AndroidAccount.signIn === "function") {
           window.AndroidAccount.signIn();
-        } else {
-          alert("Google Sign-In is available in Android app mode.");
+          return;
         }
+        if (!window.KVGoogleSignIn || typeof KVGoogleSignIn.signIn !== "function") {
+          alert("Google Sign-In is unavailable. Refresh the page and try again.");
+          return;
+        }
+        signInBtn.disabled = true;
+        KVGoogleSignIn.signIn()
+          .then(function (info) {
+            if (info) applyAccountKeyFromInfo(info);
+          })
+          .catch(function (err) {
+            var msg = err && err.message ? err.message : "Google sign-in failed.";
+            if (window.__kvOnAndroidSignInError) window.__kvOnAndroidSignInError(msg);
+            else alert(msg);
+          })
+          .finally(function () {
+            signInBtn.disabled = false;
+          });
       });
     }
     if (signOutBtn) {
       signOutBtn.addEventListener("click", function () {
         if (window.AndroidAccount && typeof window.AndroidAccount.signOut === "function") {
           window.AndroidAccount.signOut();
-        } else {
+          return;
+        }
+        var done = function () {
           setCurrentUserKey("guest");
           location.reload();
+        };
+        if (window.KVGoogleSignIn && typeof KVGoogleSignIn.signOut === "function") {
+          KVGoogleSignIn.signOut().then(done).catch(done);
+        } else {
+          done();
         }
       });
     }
+    window.__kvOnAndroidSignInError = function (msg) {
+      if (msg) alert(String(msg));
+    };
     window.__kvOnAndroidAccountChanged = function (jsonString) {
       var info = {};
       try {
         info = jsonString ? JSON.parse(String(jsonString)) : {};
       } catch (_e) {}
-      setCurrentUserKey(preferredAccountKey(info));
-      updateAccountUiLine();
-      location.reload();
+      applyAccountKeyFromInfo(info);
     };
+
+    function loadSamagamSettingsIntoForm() {
+      if (!window.KVSamagam || typeof KVSamagam.loadSamagamSettings !== "function") return;
+      var s = KVSamagam.loadSamagamSettings();
+      var u = document.getElementById("settingsSamagamUsername");
+      var p = document.getElementById("settingsSamagamPassword");
+      var c = document.getElementById("settingsSamagamCaptureUrl");
+      if (u) u.value = String(s.username || "");
+      if (p) p.value = String(s.password || "");
+      if (c) {
+        c.value = String(s.captureUrl || "");
+        if (!c.value && typeof KVSamagam.captureUrl === "function") c.placeholder = KVSamagam.captureUrl();
+      }
+    }
+
+    var saveSamagamBtn = document.getElementById("btnSaveSamagamSettings");
+    if (saveSamagamBtn) {
+      saveSamagamBtn.addEventListener("click", function () {
+        if (!window.KVSamagam || typeof KVSamagam.saveSamagamSettings !== "function") {
+          alert("SAMAGAM helper is not loaded. Refresh the page.");
+          return;
+        }
+        var u = document.getElementById("settingsSamagamUsername");
+        var p = document.getElementById("settingsSamagamPassword");
+        var c = document.getElementById("settingsSamagamCaptureUrl");
+        KVSamagam.saveSamagamSettings({
+          username: u ? String(u.value || "").trim() : "",
+          password: p ? String(p.value || "") : "",
+          captureUrl: c ? String(c.value || "").trim() : "",
+        });
+        if (typeof window.KV_showOkDialog === "function") {
+          window.KV_showOkDialog("SAMAGAM credentials saved on this device.");
+        } else {
+          alert("SAMAGAM credentials saved.");
+        }
+      });
+    }
+    loadSamagamSettingsIntoForm();
+
+    function loadWhatsAppSettingsIntoForm() {
+      if (!window.KVWhatsAppParents || typeof KVWhatsAppParents.loadSettings !== "function") return;
+      var s = KVWhatsAppParents.loadSettings();
+      var n = document.getElementById("settingsWhatsAppGroupName");
+      var j = document.getElementById("settingsWhatsAppGroupJid");
+      if (n) n.value = String(s.groupName || "");
+      if (j) j.value = String(s.groupJid || "");
+    }
+
+    var saveWhatsAppBtn = document.getElementById("btnSaveWhatsAppSettings");
+    if (saveWhatsAppBtn) {
+      saveWhatsAppBtn.addEventListener("click", function () {
+        if (!window.KVWhatsAppParents || typeof KVWhatsAppParents.saveSettings !== "function") {
+          alert("WhatsApp helper is not loaded. Refresh the page.");
+          return;
+        }
+        var n = document.getElementById("settingsWhatsAppGroupName");
+        var j = document.getElementById("settingsWhatsAppGroupJid");
+        KVWhatsAppParents.saveSettings({
+          groupName: n ? String(n.value || "").trim() : "",
+          groupJid: j ? String(j.value || "").trim() : "",
+        });
+        if (typeof window.KV_showOkDialog === "function") {
+          window.KV_showOkDialog("WhatsApp parent group settings saved.");
+        } else {
+          alert("WhatsApp settings saved.");
+        }
+      });
+    }
+    loadWhatsAppSettingsIntoForm();
 
     document.getElementById("btnCheckDriveAuth").addEventListener("click", function () {
       if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {
@@ -5646,6 +5844,24 @@
   }
 
   function init() {
+    if (String(location.protocol) === "file:") {
+      fetch("http://127.0.0.1:3000/api/health", { cache: "no-store" })
+        .then(function (r) {
+          if (r.ok) location.replace("http://localhost:3000/");
+        })
+        .catch(function () {
+          setTimeout(function () {
+            if (String(location.protocol) === "file:") {
+              alert(
+                "Vaayu is opened as a file (file://). SAMAGAM auto-login will NOT work.\n\n" +
+                  "1. Double-click start-web.bat in browser-app\n" +
+                  "2. Open http://localhost:3000 in the browser\n" +
+                  "3. Do not open index.html directly from the folder"
+              );
+            }
+          }, 800);
+        });
+    }
     applyKvBranding();
     setCurrentUserKey(preferredAccountKey(currentAccountInfo()));
     students = loadStudents();

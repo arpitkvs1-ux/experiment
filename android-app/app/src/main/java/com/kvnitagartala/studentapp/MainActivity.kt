@@ -2,6 +2,7 @@ package com.kvnitagartala.studentapp
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -16,6 +17,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +29,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import org.json.JSONObject
 
 /**
@@ -36,11 +39,24 @@ import org.json.JSONObject
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var rootLayout: FrameLayout
     private lateinit var assetLoader: WebViewAssetLoader
+    private var samagamFlow: SamagamFlowController? = null
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private lateinit var googleSignInClient: GoogleSignInClient
     private var currentGoogleAccount: GoogleSignInAccount? = null
-    private val RC_GOOGLE_SIGN_IN = 8801
+
+    private val googleSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_CANCELED) return@registerForActivityResult
+        val data = result.data
+        if (data == null) {
+            notifySignInError("Google sign-in returned no data. Please try again.")
+            return@registerForActivityResult
+        }
+        handleGoogleSignInResult(data)
+    }
 
     private val filePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         val cb = filePathCallback
@@ -107,6 +123,7 @@ class MainActivity : AppCompatActivity() {
         assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
+        rootLayout = FrameLayout(this)
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -129,6 +146,8 @@ class MainActivity : AppCompatActivity() {
                 "AndroidExport"
             )
             addJavascriptInterface(AndroidAccountBridge(), "AndroidAccount")
+            addJavascriptInterface(SamagamBridge(), "AndroidSamagam")
+            addJavascriptInterface(ShareBridge(this@MainActivity), "AndroidShare")
 
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
@@ -153,7 +172,15 @@ class MainActivity : AppCompatActivity() {
             }
             loadUrl("https://appassets.androidplatform.net/assets/browser-app/index.html")
         }
-        setContentView(webView)
+        rootLayout.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        samagamFlow = SamagamFlowController(this, rootLayout)
+        setContentView(rootLayout)
 
         onBackPressedDispatcher.addCallback(
             this,
@@ -170,16 +197,33 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != RC_GOOGLE_SIGN_IN) return
+    private fun handleGoogleSignInResult(data: Intent) {
         val task = GoogleSignIn.getSignedInAccountFromIntent(data)
         try {
             val account = task.getResult(ApiException::class.java)
             currentGoogleAccount = account
             notifyAccountChanged()
+            Toast.makeText(
+                this,
+                "Signed in: ${account.email ?: account.displayName ?: "account"}",
+                Toast.LENGTH_SHORT
+            ).show()
+        } catch (e: ApiException) {
+            if (e.statusCode == CommonStatusCodes.SIGN_IN_CANCELLED) return
+            val code = e.statusCode
+            val statusName = CommonStatusCodes.getStatusCodeString(code)
+            val hint = if (code == CommonStatusCodes.DEVELOPER_ERROR) {
+                " In Google Cloud Console, create an Android OAuth client with package " +
+                    "com.kvnitagartala.studentapp and the SHA-1 of the key used to sign this APK " +
+                    "(debug: run keytool on ~/.android/debug.keystore)."
+            } else ""
+            val msg = "Google sign-in failed ($code $statusName).$hint"
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            notifySignInError(msg)
         } catch (_e: Exception) {
-            notifyAccountChanged()
+            val msg = "Google sign-in failed. Please try again."
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            notifySignInError(msg)
         }
     }
 
@@ -200,11 +244,31 @@ class MainActivity : AppCompatActivity() {
         return obj.toString()
     }
 
+    fun notifySamagamFlowMessage(json: String) {
+        val escaped = JSONObject.quote(json)
+        webView.post {
+            webView.evaluateJavascript(
+                "window.__kvOnSamagamFlowMessage && window.__kvOnSamagamFlowMessage($escaped);",
+                null
+            )
+        }
+    }
+
     private fun notifyAccountChanged() {
         val escaped = JSONObject.quote(accountJsonString())
         webView.post {
             webView.evaluateJavascript(
                 "window.__kvOnAndroidAccountChanged && window.__kvOnAndroidAccountChanged($escaped);",
+                null
+            )
+        }
+    }
+
+    private fun notifySignInError(message: String) {
+        val escaped = JSONObject.quote(message)
+        webView.post {
+            webView.evaluateJavascript(
+                "window.__kvOnAndroidSignInError && window.__kvOnAndroidSignInError($escaped);",
                 null
             )
         }
@@ -217,7 +281,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun signIn() {
             runOnUiThread {
-                startActivityForResult(googleSignInClient.signInIntent, RC_GOOGLE_SIGN_IN)
+                googleSignInLauncher.launch(googleSignInClient.signInIntent)
             }
         }
 
@@ -228,6 +292,22 @@ class MainActivity : AppCompatActivity() {
                     currentGoogleAccount = null
                     notifyAccountChanged()
                 }
+            }
+        }
+    }
+
+    inner class SamagamBridge {
+        @JavascriptInterface
+        fun startFlow(json: String) {
+            runOnUiThread {
+                samagamFlow?.start(json)
+            }
+        }
+
+        @JavascriptInterface
+        fun closeFlow() {
+            runOnUiThread {
+                samagamFlow?.close()
             }
         }
     }

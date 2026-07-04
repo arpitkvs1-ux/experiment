@@ -35,7 +35,7 @@
     return fetch(url, {
       method: "POST",
       mode: "cors",
-      credentials: "include",
+      credentials: "omit",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: action, payload: payload || {} }),
     })
@@ -48,7 +48,7 @@
         if (!pack.okHttp) {
           throw new Error(
             pack.status === 401 || pack.status === 403
-              ? "Access denied. Redeploy web app as Anyone."
+              ? "Google Sheets sync blocked (sign-in required). In Apps Script: Deploy → Web app → Execute as: Me, Who has access: Anyone (not \"Anyone with Google account\"). Update KV_SHEETS_WEB_APP_URL if the /exec URL changed."
               : "Server error (" + pack.status + "). Try again."
           );
         }
