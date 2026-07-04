@@ -237,6 +237,14 @@
     try {
       data = jsonString ? JSON.parse(String(jsonString)) : {};
     } catch (_e) {}
+    if (data.samagamSummary && data.message != null) {
+      if (typeof global.KV_showSamagamSummaryDialog === "function") {
+        global.KV_showSamagamSummaryDialog(String(data.message), !!data.hasMismatch);
+      } else {
+        showResultDialog(String(data.message));
+      }
+      return;
+    }
     if (data.message) showResultDialog(String(data.message));
   }
 

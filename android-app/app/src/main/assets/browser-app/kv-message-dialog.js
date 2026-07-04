@@ -2,11 +2,24 @@
  * Short OK-only popup (WebView-friendly). Used for downloads and marks submit success.
  */
 (function (g) {
+  var _samagamSummaryTimer = null;
+
   function hideOkDialog() {
     var root = document.getElementById("kvOkDialog");
     if (!root) return;
     root.hidden = true;
     root.setAttribute("aria-hidden", "true");
+  }
+
+  function hideSamagamSummaryDialog() {
+    var root = document.getElementById("kvSamagamSummaryDialog");
+    if (!root) return;
+    root.hidden = true;
+    root.setAttribute("aria-hidden", "true");
+    if (_samagamSummaryTimer) {
+      clearTimeout(_samagamSummaryTimer);
+      _samagamSummaryTimer = null;
+    }
   }
 
   function clipMessage(text, maxLen) {
@@ -39,6 +52,35 @@
     }, 0);
   }
 
+  function showSamagamSummaryDialog(message, hasMismatch) {
+    hideSamagamSummaryDialog();
+    var root = document.getElementById("kvSamagamSummaryDialog");
+    var msg = document.getElementById("kvSamagamSummaryMsg");
+    var hint = document.getElementById("kvSamagamSummaryHint");
+    var btn = document.getElementById("kvSamagamSummaryBtn");
+    var text = String(message == null ? "" : message);
+    if (!root || !msg || !hint) {
+      alert(text);
+      return;
+    }
+    msg.textContent = text;
+    hint.textContent = hasMismatch
+      ? "Fix mismatches if needed, then press Submit on SAMAGAM."
+      : "Press Submit on SAMAGAM when ready.";
+    if (btn) {
+      btn.hidden = !hasMismatch;
+    }
+    root.hidden = false;
+    root.setAttribute("aria-hidden", "false");
+    if (!hasMismatch) {
+      _samagamSummaryTimer = setTimeout(hideSamagamSummaryDialog, 2000);
+    } else if (btn) {
+      setTimeout(function () {
+        btn.focus();
+      }, 0);
+    }
+  }
+
   function wireOnce() {
     var root = document.getElementById("kvOkDialog");
     var btn = document.getElementById("kvOkDialogBtn");
@@ -51,9 +93,22 @@
     document.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape" && !root.hidden) hideOkDialog();
     });
+
+    var sumRoot = document.getElementById("kvSamagamSummaryDialog");
+    var sumBtn = document.getElementById("kvSamagamSummaryBtn");
+    var sumBd = document.getElementById("kvSamagamSummaryBackdrop");
+    if (sumBtn) sumBtn.addEventListener("click", hideSamagamSummaryDialog);
+    if (sumBd) sumBd.addEventListener("click", hideSamagamSummaryDialog);
+    if (sumRoot) {
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && !sumRoot.hidden) hideSamagamSummaryDialog();
+      });
+    }
   }
 
   g.KV_showOkDialog = showOkDialog;
+  g.KV_showSamagamSummaryDialog = showSamagamSummaryDialog;
+  g.KV_hideSamagamSummaryDialog = hideSamagamSummaryDialog;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", wireOnce);

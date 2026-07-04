@@ -330,6 +330,7 @@
     applyAbsentRedHighlight(document.body);
     try {
       global.__kvAbsentRedObserver = new MutationObserver(function () {
+        if (document.getElementById("kv-samagam-summary-dialog")) return;
         applyAbsentRedHighlight(document.body);
       });
       global.__kvAbsentRedObserver.observe(document.body, {
@@ -516,9 +517,15 @@
     var summary = buildSummaryMessage({
       presentCount: (result.presentOk || []).length,
       absentCount: (result.absentSet || []).length + (result.absentManual || []).length,
-      notFound: result.missingOnSamagam || [],
+      notFound: result.missingOnSamagam || result.notFound || [],
       extraOnSamagam: result.excessOnSamagam || [],
     });
+    var hasMismatch = result.hasMismatch === true || summary.hasMismatch;
+
+    if (typeof global.KV_showSamagamSummaryDialog === "function") {
+      global.KV_showSamagamSummaryDialog(summary.message, hasMismatch);
+      return;
+    }
 
     closeSamagamSummaryDialog();
 
@@ -527,45 +534,47 @@
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.style.cssText =
-      "position:fixed;inset:0;z-index:99999;background:rgba(26,21,18,0.45);display:flex;align-items:center;justify-content:center;padding:16px;";
+      "position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;min-height:100vh;z-index:2147483647;" +
+      "background:rgba(26,21,18,0.55);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;";
 
     var panel = document.createElement("div");
     panel.style.cssText =
-      "width:min(420px,100%);background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.2);padding:18px 20px;font-family:system-ui,sans-serif;";
+      "box-sizing:border-box;width:min(480px,94vw);max-height:min(85vh,640px);overflow:auto;" +
+      "background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.25);padding:20px 22px;font-family:system-ui,sans-serif;";
 
     var title = document.createElement("h3");
     title.textContent = "Vaayu → SAMAGAM";
-    title.style.cssText = "margin:0 0 12px;font-size:1.05rem;color:#6b1c23;";
+    title.style.cssText = "margin:0 0 12px;font-size:18px;color:#6b1c23;";
 
-    var body = document.createElement("pre");
+    var body = document.createElement("div");
     body.textContent = summary.message;
     body.style.cssText =
-      "margin:0 0 14px;white-space:pre-wrap;font:14px/1.5 system-ui,sans-serif;color:#4a3728;";
+      "margin:0 0 14px;white-space:pre-wrap;word-break:break-word;font:16px/1.55 system-ui,sans-serif;color:#4a3728;";
 
     var hint = document.createElement("p");
-    hint.textContent = summary.hasMismatch
+    hint.textContent = hasMismatch
       ? "Fix mismatches if needed, then press Submit on SAMAGAM."
       : "Press Submit on SAMAGAM when ready.";
-    hint.style.cssText = "margin:0 0 14px;font-size:13px;color:#6b5344;";
+    hint.style.cssText = "margin:0 0 14px;font-size:14px;color:#6b5344;";
 
     panel.appendChild(title);
     panel.appendChild(body);
     panel.appendChild(hint);
 
-    if (summary.hasMismatch) {
+    if (hasMismatch) {
       var okBtn = document.createElement("button");
       okBtn.type = "button";
       okBtn.textContent = "OK";
       okBtn.style.cssText =
-        "display:block;margin-left:auto;padding:8px 20px;border:none;border-radius:8px;background:#6b1c23;color:#fff;font-weight:600;cursor:pointer;";
+        "display:block;margin-left:auto;padding:10px 22px;border:none;border-radius:8px;background:#6b1c23;color:#fff;font-size:16px;font-weight:600;cursor:pointer;";
       okBtn.addEventListener("click", closeSamagamSummaryDialog);
       panel.appendChild(okBtn);
     }
 
     overlay.appendChild(panel);
-    document.body.appendChild(overlay);
+    (document.documentElement || document.body).appendChild(overlay);
 
-    if (!summary.hasMismatch) {
+    if (!hasMismatch) {
       global.__kvSamagamSummaryTimer = setTimeout(closeSamagamSummaryDialog, 2000);
     }
   }
