@@ -28,6 +28,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
 import org.json.JSONObject
@@ -209,7 +210,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
         } catch (e: ApiException) {
-            if (e.statusCode == CommonStatusCodes.SIGN_IN_CANCELLED) return
+            if (e.statusCode == GoogleSignInStatusCodes.SIGN_IN_CANCELLED) return
             val code = e.statusCode
             val statusName = CommonStatusCodes.getStatusCodeString(code)
             val hint = if (code == CommonStatusCodes.DEVELOPER_ERROR) {
