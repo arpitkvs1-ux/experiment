@@ -34,6 +34,7 @@ class UbiFeeFlowController(
     private var injectLib: String? = null
     private var extractDone = false
     private var navigatingToTarget = false
+    private var loginInjected = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private enum class Phase {
@@ -56,6 +57,7 @@ class UbiFeeFlowController(
         }
         extractDone = false
         navigatingToTarget = false
+        loginInjected = false
         phase = Phase.LOGIN
         ensureOverlay()
         setStatus("Opening UBI login… Enter captcha to sign in.")
@@ -72,6 +74,7 @@ class UbiFeeFlowController(
         payload = null
         extractDone = false
         navigatingToTarget = false
+        loginInjected = false
     }
 
     private fun ensureOverlay() {
@@ -181,8 +184,11 @@ class UbiFeeFlowController(
             isLoginUrl(url) -> {
                 phase = Phase.LOGIN
                 navigatingToTarget = false
-                setStatus("Login prefilled. Enter captcha and sign in.")
-                injectLogin(p)
+                setStatus("Login ID filled. Enter 5-letter captcha to sign in.")
+                if (!loginInjected) {
+                    loginInjected = true
+                    injectLogin(p)
+                }
             }
             isTargetUrl(url, p) -> {
                 phase = Phase.TARGET
@@ -214,7 +220,7 @@ class UbiFeeFlowController(
         val user = JSONObject.quote(p.optString("username", ""))
         val pass = JSONObject.quote(p.optString("password", ""))
         val script = loadInjectLib() +
-            "\n;(function(){try{if(KVUbiFeeInject.resetReportFlowState)KVUbiFeeInject.resetReportFlowState();return KVUbiFeeInject.loginPage({username:$user,password:$pass});}catch(e){return {ok:false,error:String(e)};}})();"
+            "\n;(function(){try{return KVUbiFeeInject.loginPage({username:$user,password:$pass});}catch(e){return {ok:false,error:String(e)};}})();"
         webView?.evaluateJavascript(script, null)
     }
 
@@ -239,13 +245,11 @@ class UbiFeeFlowController(
             val parsed = parseInjectResult(raw, mode)
             val waiting = parsed.step == "receipt_wait" || parsed.step == "defaulter_wait" ||
                 parsed.step == "receipt_page_wait" || parsed.step == "defaulter_page_wait" ||
-                parsed.step == "report_export_wait" ||
-                (parsed.rows.length() == 0 && attempt < 25)
-            if (waiting) {
+                parsed.message == "Report not ready yet."
+            if (waiting && attempt < 45) {
                 setStatus(
                     when (parsed.step) {
-                        "receipt_wait", "defaulter_wait" -> "Waiting for UBI report…"
-                        "report_export_wait" -> "Exporting report (floppy menu)…"
+                        "receipt_wait", "defaulter_wait" -> parsed.message.ifBlank { "Waiting for UBI report…" }
                         "receipt_page_wait", "defaulter_page_wait" -> "Reading next report page…"
                         else -> if (mode == "defaulter") "Waiting for defaulter table…"
                         else "Waiting for fee receipt table…"
@@ -254,9 +258,16 @@ class UbiFeeFlowController(
                 mainHandler.postDelayed(
                     { injectExtract(p, attempt + 1) },
                     if (parsed.step == "receipt_wait" || parsed.step == "defaulter_wait" ||
-                        parsed.step == "report_export_wait" ||
-                        parsed.step == "receipt_page_wait" || parsed.step == "defaulter_page_wait") 2000 else 1000
+                        parsed.step == "receipt_page_wait" || parsed.step == "defaulter_page_wait") 2000 else 1200
                 )
+                return@evaluateJavascript
+            }
+            if (parsed.rows.length() == 0 && attempt < 45) {
+                setStatus(
+                    if (mode == "defaulter") "Waiting for defaulter data…"
+                    else "Waiting for receipt data…"
+                )
+                mainHandler.postDelayed({ injectExtract(p, attempt + 1) }, 1500)
                 return@evaluateJavascript
             }
             extractDone = true

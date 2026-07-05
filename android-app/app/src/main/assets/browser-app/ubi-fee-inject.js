@@ -130,30 +130,104 @@
     return { user: user, pass: pass };
   }
 
+  function findLoginButton() {
+    return (
+      document.querySelector("#BtnLogin") ||
+      document.querySelector('input[name="BtnLogin"]') ||
+      document.querySelector('input[type="submit"][value*="log in" i]') ||
+      document.querySelector('button[id*="login" i]')
+    );
+  }
+
+  function runPageLoginEncryptHandlers(passField, plainPassword) {
+    if (passField && plainPassword) setInputValue(passField, plainPassword, { focus: false });
+    var g = global;
+    var names = [
+      "encryptPassword",
+      "EncryptPassword",
+      "encryptPwd",
+      "EncryptPwd",
+      "validateLogin",
+      "ValidateLogin",
+      "LoginValidation",
+      "btnLogin_Click",
+      "fnValidate",
+      "ValidateUser",
+      "encryptLoginPassword",
+      "EncryptLoginPassword",
+    ];
+    var i;
+    for (i = 0; i < names.length; i++) {
+      if (typeof g[names[i]] === "function") {
+        try {
+          g[names[i]]();
+        } catch (_e) {}
+      }
+    }
+  }
+
+  function triggerLoginButtonClick(btn) {
+    if (!btn) return false;
+    var onclickAttr = btn.getAttribute && btn.getAttribute("onclick");
+    if (typeof btn.onclick === "function") {
+      try {
+        var ok = btn.onclick.call(btn);
+        if (ok === false) return false;
+      } catch (_e0) {}
+    }
+    if (onclickAttr) {
+      try {
+        (new Function("event", onclickAttr)).call(btn, {
+          preventDefault: function () {},
+          stopPropagation: function () {},
+          returnValue: true,
+        });
+      } catch (_e1) {}
+    }
+    try {
+      btn.click();
+      return true;
+    } catch (_e2) {
+      try {
+        btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        return true;
+      } catch (_e3) {}
+    }
+    return false;
+  }
+
+  function submitUbiLoginForm(creds) {
+    creds = creds || global.__kvUbiPendingCreds || {};
+    var cap = findCaptchaField();
+    var capVal = String(cap && cap.value ? cap.value : "").trim();
+    if (capVal.length < 5) return false;
+    var fields = findLoginFields();
+    var user = String(creds.username || "");
+    var pass = String(creds.password || "");
+    setInputValue(fields.user, user, { focus: false });
+    setInputValue(fields.pass, pass, { focus: false });
+    runPageLoginEncryptHandlers(fields.pass, pass);
+    return triggerLoginButtonClick(findLoginButton());
+  }
+
   function loginPage(creds) {
     creds = creds || {};
+    global.__kvUbiPendingCreds = creds;
     var cap = findCaptchaField();
-    bindUbiCaptchaAutoSubmit(cap);
+    bindUbiCaptchaAutoSubmit(cap, creds);
     if (isCaptchaActive()) {
       if (cap) focusCaptchaField(cap);
       return { ok: true, step: "login", skipped: true, message: "Captcha in progress." };
     }
     var fields = findLoginFields();
     var userOk = setInputValue(fields.user, String(creds.username || ""), { focus: false });
-    var passOk = setInputValue(fields.pass, String(creds.password || ""), { focus: false });
-    if (userOk && passOk && cap) {
-      focusCaptchaField(cap);
-    }
+    if (cap) focusCaptchaField(cap);
     return {
-      ok: userOk && passOk,
+      ok: userOk,
       step: "login",
-      message: userOk && passOk
-        ? "Login ID and password filled. Type 5-letter captcha to sign in."
-        : userOk
-          ? "Password field not found on UBI login page."
-          : passOk
-            ? "Login ID field not found on UBI login page."
-            : "Could not find UBI login fields.",
+      message: userOk
+        ? "Login ID filled. Type 5-letter captcha — password encrypts on sign in."
+        : "Login ID field not found on UBI login page.",
     };
   }
 
@@ -178,7 +252,7 @@
     );
   }
 
-  function bindUbiCaptchaAutoSubmit(cap) {
+  function bindUbiCaptchaAutoSubmit(cap, creds) {
     if (!cap || cap.__kvUbiCaptchaBound) return;
     cap.__kvUbiCaptchaBound = true;
     function trySubmit() {
@@ -187,27 +261,8 @@
       if (global.__kvUbiLoginSubmitted) return;
       global.__kvUbiLoginSubmitted = true;
       setTimeout(function () {
-        var btn =
-          document.querySelector("#BtnLogin") ||
-          document.querySelector('input[name="BtnLogin"]') ||
-          document.querySelector('input[type="submit"][value*="log in" i]');
-        if (btn) {
-          try {
-            btn.click();
-          } catch (_e0) {
-            try {
-              btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-            } catch (_e1) {}
-          }
-          return;
-        }
-        var form = cap.closest("form");
-        if (form) {
-          try {
-            form.submit();
-          } catch (_e2) {}
-        }
-      }, 250);
+        submitUbiLoginForm(creds || global.__kvUbiPendingCreds || {});
+      }, 450);
     }
     cap.addEventListener("input", trySubmit, { passive: true });
   }
@@ -260,6 +315,7 @@
       if (!cells.length) continue;
       var indices = {};
       var matchCount = 0;
+      var usedCols = {};
       var fk;
       for (fk in fieldLabels) {
         if (!fieldLabels.hasOwnProperty(fk)) continue;
@@ -267,12 +323,14 @@
         var labels = fieldLabels[fk];
         var ci;
         for (ci = 0; ci < cells.length; ci++) {
+          if (usedCols[ci]) continue;
           var h = normHeader(cells[ci].textContent);
           if (!h) continue;
           var li;
           for (li = 0; li < labels.length; li++) {
             if (h === labels[li] || h.indexOf(labels[li]) >= 0 || labels[li].indexOf(h) >= 0) {
               indices[fk] = ci;
+              usedCols[ci] = true;
               matchCount++;
               break;
             }
@@ -389,25 +447,53 @@
   }
 
   var RECEIPT_FIELD_LABELS = {
-    srNo: ["sr no", "s. no", "s no", "serial"],
-    studentName: ["name of student", "student name", "name"],
+    srNo: ["sr. no", "sr no", "s. no", "s no", "serial"],
+    studentName: ["name of student", "student name", "name of student"],
     dateReceipt: ["date of receipt by ubi", "date of receipt"],
-    feePaid: ["total quarterly fee actually paid"],
+    feePaid: ["total quarterly fee actually paid", "total quarterly fee payable", "fee actually paid"],
     lateFine: ["late payment fine", "late payment fine, if any", "late payment fine if any"],
+    q1Paid: ["q1 paid"],
+    q2Paid: ["q2 paid"],
+    q3Paid: ["q3 paid"],
+    q4Paid: ["q4 paid"],
   };
 
   var DEFAULTER_FIELD_LABELS = {
-    srNo: ["sr no", "s. no", "s no", "serial"],
+    srNo: ["sr. no", "sr no", "s. no", "s no", "serial"],
     studentName: ["name of student", "student name", "name"],
-    totalFeePayable: ["total fee payable", "total quarterly fee payable", "fee payable"],
+    totalFeePayable: [
+      "total fee payable",
+      "total quarterly fee payable",
+      "total quarterly fee payabl",
+      "fee payable",
+    ],
   };
 
+  function pickQuarterFeePaid(r) {
+    var keys = ["q2Paid", "q1Paid", "q3Paid", "q4Paid"];
+    var i;
+    var v;
+    for (i = 0; i < keys.length; i++) {
+      v = String(r[keys[i]] || "").trim();
+      if (v && v !== "0" && v !== "0.00") return v;
+    }
+    for (i = 0; i < keys.length; i++) {
+      v = String(r[keys[i]] || "").trim();
+      if (v) return v;
+    }
+    return "";
+  }
+
   function normalizeReceiptRow(r) {
+    var feePaid = String(r.feePaid || "").trim();
+    if (!feePaid || feePaid === "0" || feePaid === "0.00") {
+      feePaid = pickQuarterFeePaid(r);
+    }
     return {
       srNo: String(r.srNo || "").trim(),
       studentName: String(r.studentName || "").trim(),
       dateReceipt: String(r.dateReceipt || "").trim(),
-      feePaid: String(r.feePaid || "").trim(),
+      feePaid: feePaid,
       lateFine: String(r.lateFine || "").trim(),
     };
   }
@@ -773,6 +859,13 @@
     return false;
   }
 
+  function markExportSkippedForDomExtract() {
+    if (!global.__kvUbiExportDone) {
+      global.__kvUbiExportDone = true;
+      global.__kvUbiExportClickAt = Date.now() - REPORT_WAIT_AFTER_EXPORT_MS - 1;
+    }
+  }
+
   function retryGenerateIfEmpty(opts, mode) {
     if (global.__kvUbiGenerateRetried) return false;
     global.__kvUbiGenerateRetried = true;
@@ -847,7 +940,7 @@
           message: "Waiting for report (" + left + "s)…",
         };
       }
-      if (!isReceipt && !reportHasPages() && !isReportReady()) {
+      if (!reportHasPages() && !isReportReady()) {
         if (msSinceGenerate() < REPORT_MAX_LOAD_MS) {
           return {
             ok: true,
@@ -867,62 +960,8 @@
           };
         }
       }
-      if (!global.__kvUbiExportDone) {
-        if (isReceipt) {
-          tryClickExportExcelOnly();
-          if (!global.__kvUbiExportDone) {
-            return {
-              ok: true,
-              step: "report_export_user_wait",
-              mode: mode,
-              rows: [],
-              message:
-                "Click the Export (floppy) button when the report is ready — Vaayu will select Excel automatically.",
-            };
-          }
-        } else if (reportHasPages() && isReportReady()) {
-          var sinceGen = msSinceGenerate();
-          if (sinceGen >= REPORT_WAIT_AFTER_GENERATE_MS && sinceGen <= 15000) {
-            tryOpenExportExcel();
-          }
-          if (!global.__kvUbiExportDone && sinceGen > 15000) {
-            global.__kvUbiExportDone = true;
-            global.__kvUbiExportClickAt = Date.now() - REPORT_WAIT_AFTER_EXPORT_MS;
-          }
-          if (!global.__kvUbiExportDone) {
-            return {
-              ok: true,
-              step: exportWaitStep,
-              mode: mode,
-              rows: [],
-              message: "Opening export (floppy) menu…",
-            };
-          }
-        }
-      }
-      if (global.__kvUbiExportClickAt && msSinceExport() < REPORT_WAIT_AFTER_EXPORT_MS) {
-        var exportLeft = Math.ceil((REPORT_WAIT_AFTER_EXPORT_MS - msSinceExport()) / 1000);
-        return {
-          ok: true,
-          step: exportWaitStep,
-          mode: mode,
-          rows: [],
-          message: "Waiting after export (" + exportLeft + "s)…",
-        };
-      }
-    }
-
-    if (isReceipt && global.__kvUbiReportGenerateAt && !global.__kvUbiExportDone) {
-      tryClickExportExcelOnly();
-      if (!global.__kvUbiExportDone) {
-        return {
-          ok: true,
-          step: "report_export_user_wait",
-          mode: mode,
-          rows: [],
-          message:
-            "Click the Export (floppy) button when the report is ready — Vaayu will select Excel automatically.",
-        };
+      if (reportHasPages() || isReportReady()) {
+        markExportSkippedForDomExtract();
       }
     }
 
@@ -1039,6 +1078,7 @@
     resetReceiptFlowState();
     resetDefaulterFlowState();
     global.__kvUbiLoginSubmitted = false;
+    global.__kvUbiPendingCreds = null;
   }
 
   function extractDefaulterPage() {
@@ -1051,6 +1091,7 @@
   }
 
   global.KVUbiFeeInject = {
+    submitUbiLoginForm: submitUbiLoginForm,
     loginPage: loginPage,
     extractReceiptPage: extractReceiptPage,
     extractDefaulterPage: extractDefaulterPage,
