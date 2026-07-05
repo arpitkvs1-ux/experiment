@@ -2974,6 +2974,197 @@
     });
   }
 
+  function wireFeeSubtabs() {
+    var tabs = document.querySelectorAll(".fee-tab[data-fee-tab]");
+    if (!tabs.length) return;
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        resetStudentFormMode();
+        var id = this.getAttribute("data-fee-tab");
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.classList.toggle("active", on);
+          t.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        document.querySelectorAll("#view-fee .fee-panel").forEach(function (p) {
+          p.hidden = p.id !== "fee-panel-" + id;
+        });
+      });
+    });
+  }
+
+  function wireFeeModule() {
+    var receiptBtn = document.getElementById("btnFeeReceiptFetch");
+    var defaulterBtn = document.getElementById("btnFeeDefaulterFetch");
+    var receiptStatus = document.getElementById("feeReceiptStatus");
+    var defaulterStatus = document.getElementById("feeDefaulterStatus");
+    var receiptTbody = document.getElementById("feeReceiptTbody");
+    var defaulterTbody = document.getElementById("feeDefaulterTbody");
+    var receiptLastUpdated = document.getElementById("feeReceiptLastUpdated");
+    var receiptPeriod = document.getElementById("feeReceiptPeriod");
+    var defaulterLastUpdated = document.getElementById("feeDefaulterLastUpdated");
+    var defaulterPeriod = document.getElementById("feeDefaulterPeriod");
+    if (!receiptBtn || !defaulterBtn) return;
+
+    function formatFeeLastUpdated(iso) {
+      if (window.KVUbiFee && typeof KVUbiFee.formatLastUpdated === "function") {
+        return KVUbiFee.formatLastUpdated(iso);
+      }
+      return iso ? String(iso) : "Never";
+    }
+
+    function updatePeriodLine(el, cache) {
+      if (!el) return;
+      var period = cache || {};
+      var ay = period.academicYear;
+      var q = period.quarter;
+      if (!ay && window.KVUbiFee && typeof KVUbiFee.receiptPeriod === "function") {
+        var auto = KVUbiFee.receiptPeriod();
+        ay = auto.academicYear;
+        q = auto.quarter;
+      }
+      if (ay && q) {
+        el.textContent = "Report period: " + ay + " · " + q;
+      } else if (ay) {
+        el.textContent = "Report period: " + ay;
+      } else {
+        el.textContent = "";
+      }
+    }
+
+    function updateReceiptPeriodLine(cache) {
+      updatePeriodLine(receiptPeriod, cache);
+    }
+
+    function renderReceiptRows(rows) {
+      if (!receiptTbody) return;
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) {
+        receiptTbody.innerHTML = '<tr><td colspan="5" class="muted">No data yet.</td></tr>';
+        return;
+      }
+      receiptTbody.innerHTML = rows
+        .map(function (r) {
+          return (
+            "<tr><td>" +
+            escapeHtml(String(r.srNo || "")) +
+            "</td><td>" +
+            escapeHtml(String(r.studentName || "")) +
+            "</td><td>" +
+            escapeHtml(String(r.dateReceipt || r.dateSubmitted || "")) +
+            "</td><td>" +
+            escapeHtml(String(r.feePaid || r.feeSubmitted || "")) +
+            "</td><td>" +
+            escapeHtml(String(r.lateFine || "")) +
+            "</td></tr>"
+          );
+        })
+        .join("");
+    }
+
+    function applyReceiptCache(cache) {
+      cache = cache || null;
+      if (receiptLastUpdated) {
+        receiptLastUpdated.textContent =
+          "Last updated: " + formatFeeLastUpdated(cache && cache.updatedAt);
+      }
+      updateReceiptPeriodLine(cache);
+      if (cache && Array.isArray(cache.rows)) {
+        renderReceiptRows(cache.rows);
+        if (receiptStatus) {
+          receiptStatus.textContent = "Status: " + cache.rows.length + " receipt row(s) saved.";
+        }
+      } else {
+        renderReceiptRows([]);
+        if (receiptStatus) receiptStatus.textContent = "Status: idle.";
+      }
+    }
+
+    window.__kvApplyUbiReceiptCache = applyReceiptCache;
+
+    function renderDefaulterRows(rows) {
+      if (!defaulterTbody) return;
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) {
+        defaulterTbody.innerHTML = '<tr><td colspan="3" class="muted">No data yet.</td></tr>';
+        return;
+      }
+      defaulterTbody.innerHTML = rows
+        .map(function (r) {
+          return (
+            "<tr><td>" +
+            escapeHtml(String(r.srNo || "")) +
+            "</td><td>" +
+            escapeHtml(String(r.studentName || "")) +
+            "</td><td>" +
+            escapeHtml(String(r.totalFeePayable || "")) +
+            "</td></tr>"
+          );
+        })
+        .join("");
+    }
+
+    function applyDefaulterCache(cache) {
+      cache = cache || null;
+      if (defaulterLastUpdated) {
+        defaulterLastUpdated.textContent =
+          "Last updated: " + formatFeeLastUpdated(cache && cache.updatedAt);
+      }
+      updatePeriodLine(defaulterPeriod, cache);
+      if (cache && Array.isArray(cache.rows)) {
+        renderDefaulterRows(cache.rows);
+        if (defaulterStatus) {
+          defaulterStatus.textContent = "Status: " + cache.rows.length + " defaulter(s) saved.";
+        }
+      } else {
+        renderDefaulterRows([]);
+        if (defaulterStatus) defaulterStatus.textContent = "Status: idle.";
+      }
+    }
+
+    window.__kvApplyUbiDefaulterCache = applyDefaulterCache;
+
+    window.__kvRenderUbiFeeResults = function (mode, rows) {
+      if (mode === "defaulter") {
+        renderDefaulterRows(rows);
+        if (defaulterStatus) defaulterStatus.textContent = "Status: " + (rows.length || 0) + " defaulter(s) loaded.";
+      } else {
+        renderReceiptRows(rows);
+        if (receiptStatus) receiptStatus.textContent = "Status: " + (rows.length || 0) + " receipt row(s) loaded.";
+      }
+    };
+
+    if (window.KVUbiFee && typeof KVUbiFee.applyReceiptCacheToUi === "function") {
+      KVUbiFee.applyReceiptCacheToUi();
+    } else {
+      applyReceiptCache(null);
+    }
+
+    if (window.KVUbiFee && typeof KVUbiFee.applyDefaulterCacheToUi === "function") {
+      KVUbiFee.applyDefaulterCacheToUi();
+    } else {
+      applyDefaulterCache(null);
+    }
+
+    receiptBtn.addEventListener("click", function () {
+      if (!window.KVUbiFee || typeof KVUbiFee.startFlow !== "function") {
+        alert("UBI fee module not loaded. Refresh the page.");
+        return;
+      }
+      if (receiptStatus) receiptStatus.textContent = "Status: opening UBI portal…";
+      KVUbiFee.startFlow("receipt");
+    });
+
+    defaulterBtn.addEventListener("click", function () {
+      if (!window.KVUbiFee || typeof KVUbiFee.startFlow !== "function") {
+        alert("UBI fee module not loaded. Refresh the page.");
+        return;
+      }
+      if (defaulterStatus) defaulterStatus.textContent = "Status: opening UBI portal…";
+      KVUbiFee.startFlow("defaulter");
+    });
+  }
+
   function wireQuerySubtabs() {
     var tabs = document.querySelectorAll(".query-tab[data-query-tab]");
     if (!tabs.length) return;
@@ -4717,6 +4908,8 @@
     wireAppNavigation();
     wireInstructionsModal();
     wireQuerySubtabs();
+    wireFeeSubtabs();
+    wireFeeModule();
     wireConsolidatedSheets();
     wireAttendanceModule();
     wireTimetableModule();
@@ -5446,6 +5639,60 @@
       });
     }
     loadWhatsAppSettingsIntoForm();
+
+    function loadUbiSettingsIntoForm() {
+      if (!window.KVUbiFee || typeof KVUbiFee.loadUbiSettings !== "function") return;
+      var s = KVUbiFee.loadUbiSettings();
+      var u = document.getElementById("settingsUbiUsername");
+      var p = document.getElementById("settingsUbiPassword");
+      var login = document.getElementById("settingsUbiLoginUrl");
+      var rec = document.getElementById("settingsUbiReceiptUrl");
+      var def = document.getElementById("settingsUbiDefaulterUrl");
+      var ay = document.getElementById("settingsUbiAcademicYear");
+      var qtr = document.getElementById("settingsUbiQuarter");
+      if (u) u.value = String(s.username || "");
+      if (p) p.value = String(s.password || "");
+      if (login) {
+        login.value = String(s.loginUrl || "");
+        if (!login.value && typeof KVUbiFee.loginUrl === "function") login.placeholder = KVUbiFee.loginUrl();
+      }
+      if (rec) rec.value = String(s.receiptUrl || "");
+      if (def) def.value = String(s.defaulterUrl || "");
+      if (ay) ay.value = String(s.academicYear || "");
+      if (qtr) qtr.value = String(s.quarter || "");
+    }
+
+    var saveUbiBtn = document.getElementById("btnSaveUbiSettings");
+    if (saveUbiBtn) {
+      saveUbiBtn.addEventListener("click", function () {
+        if (!window.KVUbiFee || typeof KVUbiFee.saveUbiSettings !== "function") {
+          alert("UBI fee helper is not loaded. Refresh the page.");
+          return;
+        }
+        var u = document.getElementById("settingsUbiUsername");
+        var p = document.getElementById("settingsUbiPassword");
+        var login = document.getElementById("settingsUbiLoginUrl");
+        var rec = document.getElementById("settingsUbiReceiptUrl");
+        var def = document.getElementById("settingsUbiDefaulterUrl");
+        var ay = document.getElementById("settingsUbiAcademicYear");
+        var qtr = document.getElementById("settingsUbiQuarter");
+        KVUbiFee.saveUbiSettings({
+          username: u ? String(u.value || "").trim() : "",
+          password: p ? String(p.value || "") : "",
+          loginUrl: login ? String(login.value || "").trim() : "",
+          receiptUrl: rec ? String(rec.value || "").trim() : "",
+          defaulterUrl: def ? String(def.value || "").trim() : "",
+          academicYear: ay ? String(ay.value || "").trim() : "",
+          quarter: qtr ? String(qtr.value || "").trim() : "",
+        });
+        if (typeof window.KV_showOkDialog === "function") {
+          window.KV_showOkDialog("UBI fee portal settings saved.");
+        } else {
+          alert("UBI settings saved.");
+        }
+      });
+    }
+    loadUbiSettingsIntoForm();
 
     document.getElementById("btnCheckDriveAuth").addEventListener("click", function () {
       if (!window.KVSheets || typeof KVSheets.getSheetsUrl !== "function" || !KVSheets.getSheetsUrl()) {

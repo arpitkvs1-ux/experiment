@@ -762,6 +762,16 @@ input:focus {
   gap: 10px;
 }
 
+.fee-receipt-actions {
+  align-items: center;
+}
+
+.fee-last-updated {
+  margin: 0;
+  align-self: center;
+  color: var(--text-muted, #5c534c);
+}
+
 .tabs {
   display: flex;
   gap: 8px;

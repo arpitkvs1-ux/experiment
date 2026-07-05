@@ -19,11 +19,10 @@
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj || {}));
   }
 
-  function schoolLine() {
-    var school = String(global.KV_SCHOOL_NAME || "").trim();
+  function classLine() {
     var klass = String(global.KV_SCHOOL_CLASS || "").trim();
-    if (school && klass && klass !== "—") return school + " — " + klass;
-    return school || klass || "School";
+    if (klass && klass !== "—") return klass;
+    return "Class";
   }
 
   function ymdToDmy(ymd) {
@@ -36,23 +35,21 @@
   function buildAbsenteesMessage(absentees, dateYmd) {
     var list = Array.isArray(absentees) ? absentees : [];
     var lines = [];
-    lines.push(schoolLine());
+    lines.push(classLine());
     lines.push("Date: " + ymdToDmy(dateYmd));
     lines.push("");
+    lines.push("Today's Absentees:");
     if (!list.length) {
-      lines.push("All students present today.");
+      lines.push("None");
     } else {
-      lines.push("Absent today (" + list.length + "):");
       for (var i = 0; i < list.length; i++) {
         var a = list[i] || {};
-        var roll = String(a.rollNo != null ? a.rollNo : "").trim();
-        var name = String(a.studentName || a.name || "").trim();
-        var row = roll ? roll + ". " + name : name || "—";
-        lines.push((i + 1) + ". " + row);
+        var name = String(a.studentName || a.name || "").trim() || "—";
+        lines.push((i + 1) + ". " + name);
       }
     }
     lines.push("");
-    lines.push("— Vaayu");
+    lines.push("— Class Teacher");
     return lines.join("\n");
   }
 

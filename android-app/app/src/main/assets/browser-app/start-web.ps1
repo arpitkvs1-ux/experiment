@@ -8,7 +8,7 @@ if ($args.Count -gt 0) { $port = [int]$args[0] }
 function Test-VaayuDevServer([int]$p) {
     try {
         $r = Invoke-RestMethod -Uri "http://127.0.0.1:$p/api/health" -TimeoutSec 2
-        return ($r.ok -eq $true -and $r.server -eq "vaayu-dev")
+        return ($r.ok -eq $true -and $r.server -eq "vaayu-dev" -and $r.ubiPending -eq $true)
     } catch {
         return $false
     }
@@ -44,6 +44,21 @@ if (Test-VaayuDevServer $port) {
     Write-Host "Vaayu dev server already running: http://localhost:$port" -ForegroundColor Green
     Start-Process "http://localhost:$port"
     exit 0
+}
+
+if (Test-PortListening $port) {
+    try {
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+        if ($health.server -eq "vaayu-dev" -and $health.ubiPending -ne $true) {
+            Write-Host ""
+            Write-Host "Port $port has an OLD Vaayu dev server (missing UBI fee API)." -ForegroundColor Red
+            Write-Host "Restarting with the latest dev-server.mjs..." -ForegroundColor Cyan
+            Write-Host ""
+            Stop-PortListeners $port
+        }
+    } catch {
+        # fall through to generic port-in-use handling below
+    }
 }
 
 if (Test-PortListening $port) {

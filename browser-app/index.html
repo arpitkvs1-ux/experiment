@@ -18,6 +18,7 @@
           <button type="button" class="nav-item" data-nav="reports">Reports</button>
           <button type="button" class="nav-item" data-nav="marks">Marks</button>
           <button type="button" class="nav-item" data-nav="attendance">Attendance</button>
+          <button type="button" class="nav-item" data-nav="fee">Fee</button>
           <button type="button" class="nav-item" data-nav="timetable">Time table</button>
           <button type="button" class="nav-item" data-nav="consolidated">Consolidated sheets</button>
           <button type="button" class="nav-item" data-nav="students">Students</button>
@@ -348,6 +349,86 @@
             </div>
           </section>
 
+          <section id="view-fee" class="app-view" data-view="fee" hidden>
+            <div class="card">
+              <div class="card-head-row">
+                <h2 class="card-title">Fee</h2>
+                <button
+                  type="button"
+                  class="btn outline sm js-instructions-open"
+                  data-instr-template="instr-tpl-fee"
+                  data-instr-title="Fee (UBI portal)"
+                >
+                  Instructions
+                </button>
+              </div>
+              <div class="subtabs query-subtabs fee-subtabs" role="tablist" aria-label="Fee type">
+                <button type="button" class="query-tab fee-tab active" data-fee-tab="receipt" role="tab" aria-selected="true">Fee receipt</button>
+                <button type="button" class="query-tab fee-tab" data-fee-tab="defaulter" role="tab" aria-selected="false">Fee defaulter</button>
+              </div>
+
+              <div id="fee-panel-receipt" class="query-panel fee-panel" role="tabpanel">
+                <h3 class="query-panel-title">Fee receipt (UBI portal)</h3>
+                <p class="card-desc small">
+                  Auto-selects academic year and quarter, generates the UBI report, and saves a clean list:
+                  Sr No, Name, Date of receipt, Fee paid, Late fine.
+                  Enter the 5-letter captcha on UBI — login happens automatically.
+                </p>
+                <div class="btn-row fee-receipt-actions">
+                  <button type="button" class="btn primary" id="btnFeeReceiptFetch">Update now</button>
+                  <span class="card-desc small fee-last-updated" id="feeReceiptLastUpdated">Last updated: Never</span>
+                </div>
+                <p class="card-desc small" id="feeReceiptPeriod"></p>
+                <p class="card-desc small" id="feeReceiptStatus">Status: idle.</p>
+                <div class="attendance-table-wrap">
+                  <table class="data-table compact" id="feeReceiptTable">
+                    <thead>
+                      <tr>
+                        <th>Sr No</th>
+                        <th>Name of student</th>
+                        <th>Date of receipt by UBI</th>
+                        <th>Total quarterly fee actually paid</th>
+                        <th>Late payment fine</th>
+                      </tr>
+                    </thead>
+                    <tbody id="feeReceiptTbody">
+                      <tr><td colspan="5" class="muted">No data yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div id="fee-panel-defaulter" class="query-panel fee-panel" role="tabpanel" hidden>
+                <h3 class="query-panel-title">Fee defaulter (UBI portal)</h3>
+                <p class="card-desc small">
+                  Auto-selects payment period and academic year, generates the UBI report, and saves
+                  <strong>Sr. no.</strong>, <strong>name</strong>, and <strong>total fee payable</strong>.
+                  Login credentials are prefilled — enter the 5-letter captcha (auto login).
+                </p>
+                <div class="btn-row fee-receipt-actions">
+                  <button type="button" class="btn primary" id="btnFeeDefaulterFetch">Update now</button>
+                  <span class="card-desc small fee-last-updated" id="feeDefaulterLastUpdated">Last updated: Never</span>
+                </div>
+                <p class="card-desc small" id="feeDefaulterPeriod"></p>
+                <p class="card-desc small" id="feeDefaulterStatus">Status: idle.</p>
+                <div class="attendance-table-wrap">
+                  <table class="data-table compact" id="feeDefaulterTable">
+                    <thead>
+                      <tr>
+                        <th>Sr. no.</th>
+                        <th>Name</th>
+                        <th>Total fee payable</th>
+                      </tr>
+                    </thead>
+                    <tbody id="feeDefaulterTbody">
+                      <tr><td colspan="3" class="muted">No data yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section id="view-timetable" class="app-view" data-view="timetable" hidden>
             <div class="card">
               <div class="card-head-row">
@@ -486,6 +567,46 @@
               </div>
             </div>
             <div class="card">
+              <h2 class="card-title">UBI Fee Portal</h2>
+              <p class="card-desc small">
+                Used by <strong>Fee → Fee receipt</strong> and <strong>Fee defaulter</strong>. Login/password are prefilled; you enter captcha on UBI.
+                Paste the full page URLs for receipt and defaulter lists after you locate them in the UBI portal.
+              </p>
+              <div class="form-grid samagam-settings-grid">
+                <label class="field">
+                  <span>UBI Login ID</span>
+                  <input type="text" id="settingsUbiUsername" autocomplete="username" placeholder="Login ID" />
+                </label>
+                <label class="field">
+                  <span>UBI password</span>
+                  <input type="password" id="settingsUbiPassword" autocomplete="current-password" placeholder="Password" />
+                </label>
+                <label class="field samagam-capture-field">
+                  <span>Login URL (optional)</span>
+                  <input type="url" id="settingsUbiLoginUrl" placeholder="https://epay.unionbankofindia.bank.in/kvsfcs/KVLogin.aspx" />
+                </label>
+                <label class="field samagam-capture-field">
+                  <span>Fee receipt page URL</span>
+                  <input type="url" id="settingsUbiReceiptUrl" placeholder="https://epay.unionbankofindia.bank.in/kvsfcs/RptClass_FeeReceipt.aspx" />
+                </label>
+                <label class="field">
+                  <span>Academic year (optional override)</span>
+                  <input type="text" id="settingsUbiAcademicYear" placeholder="Auto — e.g. 2026-2027" />
+                </label>
+                <label class="field">
+                  <span>Quarter (optional override)</span>
+                  <input type="text" id="settingsUbiQuarter" placeholder="Auto — e.g. Jul - Sep" />
+                </label>
+                <label class="field samagam-capture-field">
+                  <span>Fee defaulter page URL</span>
+                  <input type="url" id="settingsUbiDefaulterUrl" placeholder="https://epay.unionbankofindia.bank.in/kvsfcs/RptClass_FeeDefaulter.aspx" />
+                </label>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn success" id="btnSaveUbiSettings">Save UBI settings</button>
+              </div>
+            </div>
+            <div class="card">
               <h2 class="card-title">Parent WhatsApp</h2>
               <p class="card-desc small">
                 After marking attendance, use <strong>Share absentees on WhatsApp</strong> to inform parents.
@@ -586,6 +707,16 @@
         <li><strong>See today absentee list</strong> shows today's absentees in a modal popup.</li>
         <li><strong>Today's attendance summary</strong> shows girls/boys/total for total, present, and absent.</li>
         <li><strong>Mark to SAMAGAM</strong> — after submit today. Auto: login → capture → fill P/A by <strong>student name</strong> (browser: Tampermonkey script once; Android: in-app WebView). Warns if names missing/extra; you press Submit on SAMAGAM.</li>
+      </ul>
+    </template>
+
+    <template id="instr-tpl-fee">
+      <ul class="app-instr-list">
+        <li>Save <strong>UBI Login ID</strong>, password, and the <strong>receipt</strong> / <strong>defaulter</strong> page URLs under Settings → UBI Fee Portal.</li>
+        <li><strong>Fetch from UBI portal</strong> opens UBI login (prefilled). Enter captcha manually, then Vaayu navigates to your saved page and extracts the table.</li>
+        <li><strong>Fee receipt</strong> — student name, fee submitted, date submitted.</li>
+        <li><strong>Fee defaulter</strong> — list of defaulters from your configured UBI page.</li>
+        <li>Browser: use <code>start-web.bat</code> and open <code>http://localhost:3000</code>. Android: in-app WebView (no dev server needed).</li>
       </ul>
     </template>
 
@@ -913,6 +1044,7 @@
     <script src="google-signin.js"></script>
     <script src="samagam-inject.js"></script>
     <script src="samagam-flow.js"></script>
+    <script src="ubi-fee-flow.js"></script>
     <script src="whatsapp-parents.js"></script>
     <script src="kv-message-dialog.js"></script>
     <script src="export-reports.js"></script>

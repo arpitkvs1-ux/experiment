@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rootLayout: FrameLayout
     private lateinit var assetLoader: WebViewAssetLoader
     private var samagamFlow: SamagamFlowController? = null
+    private var ubiFeeFlow: UbiFeeFlowController? = null
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private lateinit var googleSignInClient: GoogleSignInClient
     private var currentGoogleAccount: GoogleSignInAccount? = null
@@ -148,6 +149,7 @@ class MainActivity : AppCompatActivity() {
             )
             addJavascriptInterface(AndroidAccountBridge(), "AndroidAccount")
             addJavascriptInterface(SamagamBridge(), "AndroidSamagam")
+            addJavascriptInterface(UbiFeeBridge(), "AndroidUbiFee")
             addJavascriptInterface(ShareBridge(this@MainActivity), "AndroidShare")
 
             webViewClient = object : WebViewClient() {
@@ -181,6 +183,7 @@ class MainActivity : AppCompatActivity() {
             )
         )
         samagamFlow = SamagamFlowController(this, rootLayout)
+        ubiFeeFlow = UbiFeeFlowController(this, rootLayout)
         setContentView(rootLayout)
 
         onBackPressedDispatcher.addCallback(
@@ -255,6 +258,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun notifyUbiFeeFlowMessage(json: String) {
+        val escaped = JSONObject.quote(json)
+        webView.post {
+            webView.evaluateJavascript(
+                "window.__kvOnUbiFeeFlowMessage && window.__kvOnUbiFeeFlowMessage($escaped);",
+                null
+            )
+        }
+    }
+
     private fun notifyAccountChanged() {
         val escaped = JSONObject.quote(accountJsonString())
         webView.post {
@@ -309,6 +322,22 @@ class MainActivity : AppCompatActivity() {
         fun closeFlow() {
             runOnUiThread {
                 samagamFlow?.close()
+            }
+        }
+    }
+
+    inner class UbiFeeBridge {
+        @JavascriptInterface
+        fun startFlow(json: String) {
+            runOnUiThread {
+                ubiFeeFlow?.start(json)
+            }
+        }
+
+        @JavascriptInterface
+        fun closeFlow() {
+            runOnUiThread {
+                ubiFeeFlow?.close()
             }
         }
     }
